@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/capture_conversation_agent.dart';
 import '../../domain/capture_models.dart';
 import '../../domain/conflict_detector.dart';
 import '../../providers.dart';
@@ -63,25 +64,24 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   Future<void> _submitText(String text) async {
+    late final int assistantMessageIndex;
     setState(() {
       _isBusy = true;
       _messages.add(_ChatMessage.user(text));
+      _messages.add(const _ChatMessage.assistant(''));
+      assistantMessageIndex = _messages.length - 1;
     });
 
-    final turn = await ref.read(captureConversationAgentProvider).submitText(text);
-    final capture = turn.capture;
-    if (turn.usedFallback) {
-      _addAssistant('火山方舟文本模型暂不可用，已使用本地兜底整理。');
+    await for (final event in ref.read(captureConversationAgentProvider).submitTextStream(text)) {
+      if (event is CaptureAgentAssistantDelta) {
+        _appendAssistantDelta(assistantMessageIndex, event.text);
+      } else if (event is CaptureAgentTurnDone) {
+        await _applyCompletedTurn(event.turn, assistantMessageIndex);
+      } else if (event is CaptureAgentFallback) {
+        _appendAssistantDelta(assistantMessageIndex, '火山方舟文本模型暂不可用，已使用本地兜底整理。');
+        await _applyCompletedTurn(event.turn, assistantMessageIndex);
+      }
     }
-
-    final conflicts = await ref.read(entryRepositoryProvider).conflictsFor(capture);
-    setState(() {
-      _draft = capture;
-      _rawText = turn.rawTranscript;
-      _conflicts = conflicts;
-      _messages.add(_ChatMessage.assistant(capture.followUpQuestion ?? '我整理好了，请确认是否保存。'));
-      _isBusy = false;
-    });
   }
 
   Future<void> _saveDraft({String? replaceConflictId}) async {
@@ -128,6 +128,35 @@ class _VoicePageState extends ConsumerState<VoicePage> {
 
   void _addAssistant(String text) {
     setState(() => _messages.add(_ChatMessage.assistant(text)));
+  }
+
+  void _appendAssistantDelta(int index, String delta) {
+    if (!mounted || index < 0 || index >= _messages.length || delta.isEmpty) {
+      return;
+    }
+    setState(() {
+      final message = _messages[index];
+      _messages[index] = message.copyWith(text: message.text + delta);
+    });
+  }
+
+  Future<void> _applyCompletedTurn(CaptureTurn turn, int assistantMessageIndex) async {
+    final capture = turn.capture;
+    final conflicts = await ref.read(entryRepositoryProvider).conflictsFor(capture);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _draft = capture;
+      _rawText = turn.rawTranscript;
+      _conflicts = conflicts;
+      if (_messages[assistantMessageIndex].text.trim().isEmpty) {
+        _messages[assistantMessageIndex] = _messages[assistantMessageIndex].copyWith(
+          text: capture.followUpQuestion ?? '我整理好了，请确认是否保存。',
+        );
+      }
+      _isBusy = false;
+    });
   }
 
   @override
@@ -303,6 +332,10 @@ class _ChatMessage {
 
   final String text;
   final bool isUser;
+
+  _ChatMessage copyWith({String? text}) {
+    return isUser ? _ChatMessage.user(text ?? this.text) : _ChatMessage.assistant(text ?? this.text);
+  }
 }
 
 String _timeRange(TodoTimeBlock block) {

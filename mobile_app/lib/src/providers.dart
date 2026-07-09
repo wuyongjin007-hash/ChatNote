@@ -44,6 +44,25 @@ final captureConversationAgentProvider = Provider<CaptureConversationAgent>((ref
         isFollowUp: request.isFollowUp,
       );
     },
+    captureStream: (request) {
+      return arkClient
+          .captureTextStream(
+            text: request.text,
+            conversation: request.conversation,
+            pendingDraft: request.pendingDraft,
+            missingFields: request.missingFields,
+            isFollowUp: request.isFollowUp,
+          )
+          .map((event) {
+        if (event is ArkAssistantDelta) {
+          return CaptureAgentAssistantDelta(event.text);
+        }
+        if (event is ArkCaptureDone) {
+          return CaptureAgentDone(event.capture);
+        }
+        throw StateError('Unsupported Ark stream event: $event');
+      });
+    },
   );
 });
 
