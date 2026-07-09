@@ -1,0 +1,22 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.localidea.capture"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.localidea.capture"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "0.1.0"
+    }
+}
+
+flutter {
+    source = "../.."
+}
