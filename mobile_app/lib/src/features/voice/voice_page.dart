@@ -44,7 +44,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     try {
       final text = await ref.read(speechChannelProvider).stopRecognition();
       if (text.trim().isEmpty) {
-        _addAssistant('没有识别到语音内容。火山方舟语音理解接入后，这里会显示识别结果。');
+        _addAssistant('没有识别到语音内容。');
         return;
       }
       await _submitText(text);
@@ -65,31 +65,19 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   Future<void> _submitText(String text) async {
     setState(() {
       _isBusy = true;
-      _rawText = text;
       _messages.add(_ChatMessage.user(text));
     });
 
-    final arkText = ref.read(volcengineArkCaptureClientProvider);
-    final heuristics = ref.read(localCaptureHeuristicsProvider);
-    CaptureResult capture;
-    try {
-      capture = await arkText.captureText(
-        text: text,
-        conversation: _messages
-            .map((message) => {
-                  'role': message.isUser ? 'user' : 'assistant',
-                  'content': message.text,
-                })
-            .toList(),
-      );
-    } catch (error) {
-      capture = heuristics.extract(text);
-      _addAssistant('火山方舟文本模型暂不可用，已使用本地兜底整理：$error');
+    final turn = await ref.read(captureConversationAgentProvider).submitText(text);
+    final capture = turn.capture;
+    if (turn.usedFallback) {
+      _addAssistant('火山方舟文本模型暂不可用，已使用本地兜底整理。');
     }
 
     final conflicts = await ref.read(entryRepositoryProvider).conflictsFor(capture);
     setState(() {
       _draft = capture;
+      _rawText = turn.rawTranscript;
       _conflicts = conflicts;
       _messages.add(_ChatMessage.assistant(capture.followUpQuestion ?? '我整理好了，请确认是否保存。'));
       _isBusy = false;
@@ -118,6 +106,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       await ref.read(databaseProvider).deleteEntry(replaceConflictId);
     }
     await repository.saveCapture(draft, rawText);
+    ref.read(captureConversationAgentProvider).reset();
     setState(() {
       _draft = null;
       _rawText = null;
@@ -128,6 +117,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   void _discardDraft() {
+    ref.read(captureConversationAgentProvider).reset();
     setState(() {
       _draft = null;
       _rawText = null;

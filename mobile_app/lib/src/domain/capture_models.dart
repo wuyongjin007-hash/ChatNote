@@ -34,6 +34,17 @@ class TodoPayload {
       status: json['status'] as String? ?? 'draft',
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'start_at': startAt?.toIso8601String(),
+      'end_at': endAt?.toIso8601String(),
+      'location': location,
+      'topic': topic,
+      'reminder_at': reminderAt?.toIso8601String(),
+      'status': status,
+    };
+  }
 }
 
 class IdeaPayload {
@@ -53,6 +64,14 @@ class IdeaPayload {
       sourceHint: json['source_hint'] as String?,
       tags: (json['tags'] as List<dynamic>? ?? const []).map((item) => item.toString()).toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'summary': summary,
+      'source_hint': sourceHint,
+      'tags': tags,
+    };
   }
 }
 
@@ -95,6 +114,20 @@ class CaptureResult {
           ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'intent_type': intentType.name,
+      'confidence': confidence,
+      'title': title,
+      'summary': summary,
+      'missing_fields': missingFields,
+      'follow_up_question': followUpQuestion,
+      'should_save': shouldSave,
+      'todo_payload': todoPayload?.toJson(),
+      'idea_payload': ideaPayload?.toJson(),
+    };
   }
 }
 
