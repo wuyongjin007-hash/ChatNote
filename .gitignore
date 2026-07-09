@@ -16,6 +16,7 @@ node_modules/
 .env.*
 !.env.example
 mobile_app/android/local.properties
+mobile_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 mobile_app/android/app/debug
 mobile_app/android/app/profile
 mobile_app/android/app/release

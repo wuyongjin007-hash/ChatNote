@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/entry_repository.dart';
 import '../../domain/capture_models.dart';
 import '../../domain/conflict_detector.dart';
 import '../../providers.dart';
@@ -240,7 +239,7 @@ class _DraftCard extends StatelessWidget {
               const SizedBox(height: 12),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.12),
+                  color: Colors.orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Padding(

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/domain/local_capture_heuristics.dart';
 
 void main() {
