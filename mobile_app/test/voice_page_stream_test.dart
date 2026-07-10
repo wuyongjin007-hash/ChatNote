@@ -7,9 +7,11 @@ import 'package:local_idea_capture/src/domain/capture_conversation_agent.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/features/voice/voice_page.dart';
 import 'package:local_idea_capture/src/providers.dart';
+import 'package:local_idea_capture/src/speech/volcengine_speech_service.dart';
 
 void main() {
-  testWidgets('streams assistant text and shows a draft card after completion', (tester) async {
+  testWidgets('uses one input bar to switch between text and voice modes',
+      (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
 
@@ -17,34 +19,152 @@ void main() {
       ProviderScope(
         overrides: [
           databaseProvider.overrideWithValue(database),
-          captureConversationAgentProvider.overrideWithValue(_FakeCaptureConversationAgent()),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
         ],
         child: const MaterialApp(home: Scaffold(body: VoicePage())),
       ),
     );
 
-    await tester.enterText(find.byType(TextField), '明天上午九点开会');
-    await tester.tap(find.byIcon(Icons.send));
+    expect(find.text('发送消息或按住说话...'), findsOneWidget);
+    expect(find.text('先用文字模拟语音输入...'), findsNothing);
+    expect(find.byIcon(Icons.add), findsNothing);
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('按住说话'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byIcon(Icons.keyboard_alt_outlined), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发送消息或按住说话...'), findsOneWidget);
+  });
+
+  testWidgets('streams assistant text and shows a draft card after completion',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'manual meeting');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pump();
     await tester.pump();
 
-    expect(find.textContaining('我理解这是一个待办'), findsOneWidget);
+    expect(find.textContaining('AI todo'), findsOneWidget);
 
     await tester.pump();
 
-    expect(find.text('预算会议'), findsOneWidget);
+    expect(find.text('Budget meeting'), findsOneWidget);
     expect(find.text('缺少信息：location'), findsOneWidget);
+  });
+
+  testWidgets(
+      'shows recording overlay, recognition bubble, then recognized voice text',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          speechChannelProvider
+              .overrideWithValue(_FakeSpeechService(
+            'voice meeting',
+            delay: const Duration(seconds: 1),
+          )),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+
+    final center =
+        tester.getCenter(find.byKey(const Key('voice-press-button')));
+    final gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.byKey(const Key('voice-recording-overlay')), findsOneWidget);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.byKey(const Key('voice-recognizing-bubble')), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.byKey(const Key('voice-recognizing-bubble')), findsNothing);
+    expect(find.text('voice meeting'), findsOneWidget);
+    expect(find.textContaining('AI todo'), findsOneWidget);
+  });
+
+  testWidgets('conflict draft only shows conflict resolution actions',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await database.saveTodo(capture: _existingTodoDraft(), rawText: 'existing');
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider.overrideWithValue(
+            _FakeCaptureConversationAgent(capture: _savableTodoDraft()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'overlapping todo');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('时间冲突'), findsOneWidget);
+    expect(find.text('保留原日程'), findsOneWidget);
+    expect(find.text('删除原日程并保存本次'), findsOneWidget);
+    expect(find.text('取消'), findsNothing);
+    expect(find.text('保存'), findsNothing);
   });
 }
 
 class _FakeCaptureConversationAgent implements CaptureConversationAgent {
+  _FakeCaptureConversationAgent({CaptureResult? capture})
+      : _capture = capture ?? _todoDraft();
+
+  final CaptureResult _capture;
+
   @override
   Stream<CaptureAgentStreamEvent> submitTextStream(String text) async* {
-    yield const CaptureAgentAssistantDelta('我理解这是一个待办，');
-    yield const CaptureAgentAssistantDelta('还需要地点。');
+    yield const CaptureAgentAssistantDelta('AI todo, ');
+    yield const CaptureAgentAssistantDelta('need location.');
     yield CaptureAgentTurnDone(
       CaptureTurn(
-        capture: _todoDraft(),
+        capture: _capture,
         rawTranscript: text,
         isFollowUp: false,
         usedFallback: false,
@@ -61,20 +181,84 @@ class _FakeCaptureConversationAgent implements CaptureConversationAgent {
   void reset() {}
 }
 
+class _FakeSpeechService implements VolcengineSpeechService {
+  _FakeSpeechService(this.result, {this.delay = const Duration(milliseconds: 10)});
+
+  final String result;
+  final Duration delay;
+  bool cancelled = false;
+
+  @override
+  Future<void> startRecognition() async {}
+
+  @override
+  Future<String> stopRecognition() async {
+    await Future<void>.delayed(delay);
+    return result;
+  }
+
+  @override
+  Future<void> cancelRecognition() async {
+    cancelled = true;
+  }
+}
+
 CaptureResult _todoDraft() {
   return CaptureResult(
     intentType: CaptureIntentType.todo,
     confidence: 0.92,
-    title: '预算会议',
-    summary: '明天上午九点开预算会议',
+    title: 'Budget meeting',
+    summary: 'Tomorrow morning budget meeting',
     missingFields: const ['location'],
-    followUpQuestion: '会议在哪里开？',
+    followUpQuestion: 'Where is the meeting?',
     shouldSave: false,
     todoPayload: TodoPayload(
       startAt: DateTime(2026, 7, 10, 9),
       endAt: DateTime(2026, 7, 10, 10),
       location: null,
-      topic: '预算',
+      topic: 'budget',
+      reminderAt: null,
+      status: 'pending',
+    ),
+    ideaPayload: null,
+  );
+}
+
+CaptureResult _savableTodoDraft() {
+  return CaptureResult(
+    intentType: CaptureIntentType.todo,
+    confidence: 0.95,
+    title: 'New overlapping todo',
+    summary: 'New todo at the same time',
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: true,
+    todoPayload: TodoPayload(
+      startAt: DateTime(2026, 7, 10, 9),
+      endAt: DateTime(2026, 7, 10, 9, 30),
+      location: 'market',
+      topic: 'buy fruit',
+      reminderAt: null,
+      status: 'pending',
+    ),
+    ideaPayload: null,
+  );
+}
+
+CaptureResult _existingTodoDraft() {
+  return CaptureResult(
+    intentType: CaptureIntentType.todo,
+    confidence: 0.95,
+    title: 'Existing todo',
+    summary: 'Existing todo at the same time',
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: true,
+    todoPayload: TodoPayload(
+      startAt: DateTime(2026, 7, 10, 9),
+      endAt: DateTime(2026, 7, 10, 9, 30),
+      location: 'market',
+      topic: 'existing',
       reminderAt: null,
       status: 'pending',
     ),

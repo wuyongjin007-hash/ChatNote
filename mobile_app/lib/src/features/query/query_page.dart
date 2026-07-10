@@ -3,17 +3,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
+import '../../widgets/page_header.dart';
 
-class QueryPage extends ConsumerStatefulWidget {
-  const QueryPage({super.key});
+class TodoQueryPage extends ConsumerWidget {
+  const TodoQueryPage({super.key});
 
   @override
-  ConsumerState<QueryPage> createState() => _QueryPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: '待办'),
+          SizedBox(height: 12),
+          Expanded(child: _TodoList()),
+        ],
+      ),
+    );
+  }
 }
 
-class _QueryPageState extends ConsumerState<QueryPage> {
+class IdeaQueryPage extends ConsumerStatefulWidget {
+  const IdeaQueryPage({super.key});
+
+  @override
+  ConsumerState<IdeaQueryPage> createState() => _IdeaQueryPageState();
+}
+
+class _IdeaQueryPageState extends ConsumerState<IdeaQueryPage> {
   final _searchController = TextEditingController();
-  var _tabIndex = 0;
 
   @override
   void dispose() {
@@ -28,36 +47,29 @@ class _QueryPageState extends ConsumerState<QueryPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('查询', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const PageHeader(title: '创意'),
           const SizedBox(height: 12),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 0, label: Text('待办'), icon: Icon(Icons.event_note)),
-              ButtonSegment(value: 1, label: Text('创意'), icon: Icon(Icons.lightbulb_outline)),
-            ],
-            selected: {_tabIndex},
-            onSelectionChanged: (value) => setState(() => _tabIndex = value.first),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: '搜索创意...',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => setState(() {}),
+              ),
+            ),
+            onSubmitted: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          if (_tabIndex == 1)
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '搜索创意...',
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() {})),
-              ),
-              onSubmitted: (_) => setState(() {}),
-            ),
-          const SizedBox(height: 12),
-          Expanded(child: _tabIndex == 0 ? const _TodoList() : _IdeaList(queryBuilder: _emptyQuery)),
+          Expanded(child: _IdeaList(queryBuilder: _query)),
         ],
       ),
     );
   }
 
-  String _emptyQuery() => _searchController.text;
+  String _query() => _searchController.text;
 }
 
 class _TodoList extends ConsumerWidget {
@@ -116,7 +128,10 @@ class _IdeaList extends ConsumerWidget {
                         padding: const EdgeInsets.only(top: 8),
                         child: Wrap(
                           spacing: 6,
-                          children: [for (final tag in idea.tags) Chip(label: Text(tag))],
+                          runSpacing: 6,
+                          children: [
+                            for (final tag in idea.tags) _IdeaTagPill(tag: tag),
+                          ],
                         ),
                       ),
                   ],
@@ -126,6 +141,44 @@ class _IdeaList extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _IdeaTagPill extends StatelessWidget {
+  const _IdeaTagPill({required this.tag});
+
+  final String tag;
+
+  static const _palette = [
+    (background: Color(0xfffff1f2), foreground: Color(0xffbe123c)),
+    (background: Color(0xffeff6ff), foreground: Color(0xff1d4ed8)),
+    (background: Color(0xffecfdf5), foreground: Color(0xff047857)),
+    (background: Color(0xfffff7ed), foreground: Color(0xffc2410c)),
+    (background: Color(0xfff5f3ff), foreground: Color(0xff6d28d9)),
+    (background: Color(0xfff0fdfa), foreground: Color(0xff0f766e)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _palette[tag.hashCode.abs() % _palette.length];
+    return Container(
+      key: Key('idea-tag-pill-$tag'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.14)),
+      ),
+      child: Text(
+        tag,
+        style: TextStyle(
+          color: colors.foreground,
+          fontSize: 11,
+          height: 1.1,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -141,7 +194,13 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
     for (final entry in grouped.entries) ...[
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Text(entry.key, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        child: Text(
+          entry.key,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
       ),
       for (final todo in entry.value)
         Card(
@@ -149,7 +208,8 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
             leading: const Icon(Icons.event_available),
             title: Text(todo.title),
             subtitle: Text([
-              if (todo.startAt != null && todo.endAt != null) '${_timeLabel(todo.startAt!)}-${_timeLabel(todo.endAt!)}',
+              if (todo.startAt != null && todo.endAt != null)
+                '${_timeLabel(todo.startAt!)}-${_timeLabel(todo.endAt!)}',
               if ((todo.location ?? '').isNotEmpty) todo.location!,
               if ((todo.topic ?? '').isNotEmpty) todo.topic!,
             ].join('  ')),

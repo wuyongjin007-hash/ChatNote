@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
+import '../../widgets/page_header.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -50,7 +51,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('设置已保存')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('设置已保存')));
   }
 
   Future<void> _clearData() async {
@@ -58,7 +60,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('本地数据已清空')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('本地数据已清空')));
   }
 
   @override
@@ -70,7 +73,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: ListView(
             children: [
-              Text('设置', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+              const PageHeader(title: '设置'),
               const SizedBox(height: 16),
               TextField(
                 controller: _arkApiKeyController,
@@ -113,7 +116,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 value: _databaseEncryption,
                 title: const Text('启用数据库加密'),
                 subtitle: const Text('当前为预留开关；接入 SQLCipher 后生效。'),
-                onChanged: (value) => setState(() => _databaseEncryption = value),
+                onChanged: (value) =>
+                    setState(() => _databaseEncryption = value),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
