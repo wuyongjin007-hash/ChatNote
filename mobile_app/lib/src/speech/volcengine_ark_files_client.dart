@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import '../settings/settings_store.dart';
 
 class VolcengineArkFilesClient {
-  VolcengineArkFilesClient(this._settings, {http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
+  VolcengineArkFilesClient(this._settings, {http.Client? httpClient})
+      : _httpClient = httpClient ?? http.Client();
 
   final SettingsStore _settings;
   final http.Client _httpClient;
@@ -17,7 +18,8 @@ class VolcengineArkFilesClient {
       throw const VolcengineArkException('请先在设置页填写火山方舟 API Key');
     }
 
-    final baseUrl = (await _settings.volcengineArkBaseUrl()).replaceAll(RegExp(r'/$'), '');
+    final baseUrl =
+        (await _settings.volcengineArkBaseUrl()).replaceAll(RegExp(r'/$'), '');
     final model = await _settings.volcengineArkSpeechModel();
     final fileId = await _uploadAudioFile(
       baseUrl: baseUrl,
@@ -30,6 +32,7 @@ class VolcengineArkFilesClient {
       apiKey: apiKey,
       model: model,
       fileId: fileId,
+      audioPath: audioPath,
     );
   }
 
@@ -48,10 +51,11 @@ class VolcengineArkFilesClient {
       ..fields['purpose'] = 'user_data'
       ..files.add(await http.MultipartFile.fromPath('file', audioPath));
 
-    final streamed = await request.send();
+    final streamed = await _httpClient.send(request);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw VolcengineArkException('上传音频失败：HTTP ${response.statusCode} ${response.body}');
+      throw VolcengineArkException(
+          '上传音频失败：HTTP ${response.statusCode} ${response.body}');
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -67,6 +71,7 @@ class VolcengineArkFilesClient {
     required String apiKey,
     required String model,
     required String fileId,
+    required String audioPath,
   }) async {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/responses'),
@@ -95,7 +100,10 @@ class VolcengineArkFilesClient {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw VolcengineArkException('语音理解失败：HTTP ${response.statusCode} ${response.body}');
+      throw VolcengineArkException(
+        '语音理解失败：HTTP ${response.statusCode} ${response.body}\n'
+        '本地音频：${await _audioFileDebugInfo(fileId: fileId, audioPath: audioPath)}',
+      );
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -135,6 +143,17 @@ class VolcengineArkFilesClient {
     }
 
     return '';
+  }
+
+  Future<String> _audioFileDebugInfo(
+      {required String fileId, required String audioPath}) async {
+    final file = File(audioPath);
+    final extension = audioPath.contains('.')
+        ? audioPath.substring(audioPath.lastIndexOf('.'))
+        : '';
+    final size = await file.exists() ? await file.length() : -1;
+    return 'file_id=$fileId, ext=$extension, size=$size bytes。若提示 invalid state: failed，通常表示方舟文件预处理失败，'
+        '优先检查录音是否过短、文件是否为空、音频格式是否为 16k 单声道 WAV。';
   }
 }
 

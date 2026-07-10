@@ -7,7 +7,8 @@ import 'package:record/record.dart';
 import 'volcengine_ark_files_client.dart';
 
 class VolcengineSpeechService {
-  VolcengineSpeechService(this._arkClient, {AudioRecorder? recorder}) : _recorder = recorder ?? AudioRecorder();
+  VolcengineSpeechService(this._arkClient, {AudioRecorder? recorder})
+      : _recorder = recorder ?? AudioRecorder();
 
   final VolcengineArkFilesClient _arkClient;
   final AudioRecorder _recorder;
@@ -19,13 +20,14 @@ class VolcengineSpeechService {
     }
 
     final dir = await getTemporaryDirectory();
-    final path = p.join(dir.path, 'idea-capture-${DateTime.now().millisecondsSinceEpoch}.m4a');
+    final path = p.join(
+        dir.path, 'idea-capture-${DateTime.now().millisecondsSinceEpoch}.wav');
     _currentPath = path;
     await _recorder.start(
       const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
+        encoder: AudioEncoder.wav,
         sampleRate: 16000,
+        numChannels: 1,
       ),
       path: path,
     );
@@ -36,6 +38,11 @@ class VolcengineSpeechService {
     _currentPath = null;
     if (path == null || !File(path).existsSync()) {
       throw const VolcengineArkException('没有生成可上传的录音文件');
+    }
+    final file = File(path);
+    final length = await file.length();
+    if (length <= 44) {
+      throw const VolcengineArkException('录音文件为空或时间太短，请按住按钮说完后再松开');
     }
     return _arkClient.understandAudioFile(path);
   }
