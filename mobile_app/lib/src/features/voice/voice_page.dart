@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/app_database.dart';
 import '../../domain/capture_conversation_agent.dart';
 import '../../domain/capture_models.dart';
 import '../../domain/conflict_detector.dart';
@@ -26,6 +27,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   CaptureResult? _draft;
   String? _rawText;
   List<TodoTimeBlock> _conflicts = const [];
+  List<EntryListItem> _deleteMatches = const [];
   _VoiceStage _voiceStage = _VoiceStage.idle;
   bool _aiBusy = false;
   bool _recordingWillCancel = false;
@@ -138,6 +140,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     setState(() {
       _aiBusy = true;
       _voiceStage = _VoiceStage.organizing;
+      _deleteMatches = const [];
       if (addUserMessage) {
         _messages.add(_ChatMessage.user(text));
       }
@@ -193,12 +196,41 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     _scrollToBottom();
   }
 
+  Future<void> _confirmTodoDeletion() async {
+    final matches = _deleteMatches;
+    if (matches.isEmpty) {
+      return;
+    }
+    setState(() => _aiBusy = true);
+    await ref.read(entryRepositoryProvider).deleteTodos(
+          matches.map((item) => item.id).toList(growable: false),
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _deleteMatches = const [];
+      _aiBusy = false;
+      _messages.add(_ChatMessage.assistant('已删除 ${matches.length} 条待办。'));
+    });
+    _scrollToBottom();
+  }
+
+  void _cancelTodoDeletion() {
+    setState(() {
+      _deleteMatches = const [];
+      _messages.add(const _ChatMessage.assistant('已取消删除。'));
+    });
+    _scrollToBottom();
+  }
+
   void _discardDraft() {
     ref.read(captureConversationAgentProvider).reset();
     setState(() {
       _draft = null;
       _rawText = null;
       _conflicts = const [];
+      _deleteMatches = const [];
       _voiceStage = _VoiceStage.idle;
       _messages.add(const _ChatMessage.assistant('已取消本次录入。'));
     });
@@ -241,6 +273,38 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   Future<void> _applyCompletedTurn(
       CaptureTurn turn, int assistantMessageIndex) async {
     final capture = turn.capture;
+    if (capture.intentType == CaptureIntentType.todoDelete) {
+      final payload = capture.todoDeletePayload;
+      final matches = payload == null
+          ? const <EntryListItem>[]
+          : await ref
+              .read(entryRepositoryProvider)
+              .findTodosForDeletion(payload);
+      if (!mounted) {
+        return;
+      }
+      ref.read(captureConversationAgentProvider).reset();
+      setState(() {
+        _draft = null;
+        _rawText = null;
+        _conflicts = const [];
+        _deleteMatches = matches;
+        if (_messages[assistantMessageIndex].text.trim().isEmpty) {
+          _messages[assistantMessageIndex] =
+              _messages[assistantMessageIndex].copyWith(
+            text: matches.isEmpty
+                ? '没有找到符合条件的待办。'
+                : '找到了 ${matches.length} 条待办，请确认是否删除。',
+          );
+        } else if (matches.isEmpty) {
+          _messages.add(const _ChatMessage.assistant('没有找到符合条件的待办。'));
+        }
+        _aiBusy = false;
+        _voiceStage = _VoiceStage.idle;
+      });
+      _scrollToBottom();
+      return;
+    }
     final conflicts =
         await ref.read(entryRepositoryProvider).conflictsFor(capture);
     if (!mounted) {
@@ -302,6 +366,12 @@ class _VoicePageState extends ConsumerState<VoicePage> {
                         onReplaceConflict: (id) =>
                             _saveDraft(replaceConflictId: id),
                       ),
+                    if (_deleteMatches.isNotEmpty)
+                      _TodoDeleteCard(
+                        matches: _deleteMatches,
+                        onCancel: _cancelTodoDeletion,
+                        onConfirm: _confirmTodoDeletion,
+                      ),
                   ],
                 ),
               ),
@@ -325,6 +395,54 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         if (_voiceStage == _VoiceStage.recording)
           _RecordingOverlay(willCancel: _recordingWillCancel),
       ],
+    );
+  }
+}
+
+class _TodoDeleteCard extends StatelessWidget {
+  const _TodoDeleteCard({
+    required this.matches,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final List<EntryListItem> matches;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = matches.take(3);
+    return Card(
+      key: const Key('todo-delete-confirmation-card'),
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '准备删除 ${matches.length} 条待办',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            for (final item in visible)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text('${_shortTime(item.startAt)} ${item.title}'),
+              ),
+            if (matches.length > 3) Text('还有 ${matches.length - 3} 条...'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton(onPressed: onCancel, child: const Text('取消')),
+                const SizedBox(width: 12),
+                FilledButton(onPressed: onConfirm, child: const Text('确认删除')),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -492,7 +610,7 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-class _UnifiedInputBar extends StatelessWidget {
+class _UnifiedInputBar extends StatefulWidget {
   const _UnifiedInputBar({
     required this.controller,
     required this.enabled,
@@ -516,6 +634,52 @@ class _UnifiedInputBar extends StatelessWidget {
   final VoidCallback onLongPressEnd;
 
   @override
+  State<_UnifiedInputBar> createState() => _UnifiedInputBarState();
+}
+
+class _UnifiedInputBarState extends State<_UnifiedInputBar> {
+  int? _activeVoicePointer;
+  Offset? _voicePointerOrigin;
+
+  void _handleVoicePointerDown(PointerDownEvent event) {
+    if (!widget.enabled || widget.isTextMode || _activeVoicePointer != null) {
+      return;
+    }
+    _activeVoicePointer = event.pointer;
+    _voicePointerOrigin = event.position;
+    widget.onLongPressStart();
+  }
+
+  void _handleVoicePointerMove(PointerMoveEvent event) {
+    if (event.pointer != _activeVoicePointer) {
+      return;
+    }
+    final origin = _voicePointerOrigin;
+    if (origin == null) {
+      return;
+    }
+    widget.onLongPressMoveUpdate(event.position - origin);
+  }
+
+  void _handleVoicePointerUp(PointerUpEvent event) {
+    if (event.pointer != _activeVoicePointer) {
+      return;
+    }
+    _activeVoicePointer = null;
+    _voicePointerOrigin = null;
+    widget.onLongPressEnd();
+  }
+
+  void _handleVoicePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _activeVoicePointer) {
+      return;
+    }
+    _activeVoicePointer = null;
+    _voicePointerOrigin = null;
+    widget.onLongPressEnd();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -536,7 +700,7 @@ class _UnifiedInputBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: enabled ? () {} : null,
+            onPressed: widget.enabled ? () {} : null,
             icon: const Icon(Icons.photo_camera_outlined),
             tooltip: '拍照',
           ),
@@ -546,15 +710,16 @@ class _UnifiedInputBar extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
-              child: isTextMode
+              child: widget.isTextMode
                   ? TextField(
                       key: const Key('merged-text-input'),
-                      controller: controller,
+                      controller: widget.controller,
                       minLines: 1,
                       maxLines: 2,
-                      enabled: enabled,
+                      enabled: widget.enabled,
                       textInputAction: TextInputAction.send,
-                      onSubmitted: enabled ? (_) => onSubmitText() : null,
+                      onSubmitted:
+                          widget.enabled ? (_) => widget.onSubmitText() : null,
                       decoration: InputDecoration(
                         hintText: '发送消息或按住说话...',
                         isDense: true,
@@ -563,24 +728,22 @@ class _UnifiedInputBar extends StatelessWidget {
                           minWidth: 36,
                           minHeight: 36,
                         ),
-                        suffixIcon: hasText
+                        suffixIcon: widget.hasText
                             ? IconButton(
                                 icon: const Icon(Icons.send_rounded),
                                 tooltip: '发送',
-                                onPressed: enabled ? onSubmitText : null,
+                                onPressed:
+                                    widget.enabled ? widget.onSubmitText : null,
                               )
                             : null,
                       ),
                     )
-                  : GestureDetector(
+                  : Listener(
                       key: const Key('voice-press-button'),
-                      onLongPressStart:
-                          enabled ? (_) => onLongPressStart() : null,
-                      onLongPressMoveUpdate: enabled
-                          ? (details) =>
-                              onLongPressMoveUpdate(details.offsetFromOrigin)
-                          : null,
-                      onLongPressEnd: enabled ? (_) => onLongPressEnd() : null,
+                      onPointerDown: _handleVoicePointerDown,
+                      onPointerMove: _handleVoicePointerMove,
+                      onPointerUp: _handleVoicePointerUp,
+                      onPointerCancel: _handleVoicePointerCancel,
                       child: Container(
                         height: 46,
                         alignment: Alignment.center,
@@ -603,13 +766,13 @@ class _UnifiedInputBar extends StatelessWidget {
           const SizedBox(width: 4),
           IconButton(
             key: const Key('voice-mode-toggle-button'),
-            onPressed: enabled ? onToggleMode : null,
+            onPressed: widget.enabled ? widget.onToggleMode : null,
             icon: Icon(
-              isTextMode
+              widget.isTextMode
                   ? Icons.keyboard_voice_outlined
                   : Icons.keyboard_alt_outlined,
             ),
-            tooltip: isTextMode ? '切换到语音输入' : '切换到文字输入',
+            tooltip: widget.isTextMode ? '切换到语音输入' : '切换到文字输入',
           ),
         ],
       ),
@@ -852,6 +1015,17 @@ class _ChatMessage {
 }
 
 String _timeRange(TodoTimeBlock block) {
+  final start = block.startAt.toLocal();
+  final end = block.endAt.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
-  return '${two(block.startAt.hour)}:${two(block.startAt.minute)}-${two(block.endAt.hour)}:${two(block.endAt.minute)}';
+  return '${two(start.hour)}:${two(start.minute)}-${two(end.hour)}:${two(end.minute)}';
+}
+
+String _shortTime(DateTime? value) {
+  if (value == null) {
+    return '--:--';
+  }
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}';
 }

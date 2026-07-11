@@ -83,8 +83,7 @@ void main() {
       ProviderScope(
         overrides: [
           databaseProvider.overrideWithValue(database),
-          speechChannelProvider
-              .overrideWithValue(_FakeSpeechService(
+          speechChannelProvider.overrideWithValue(_FakeSpeechService(
             'voice meeting',
             delay: const Duration(seconds: 1),
           )),
@@ -118,6 +117,40 @@ void main() {
     expect(find.textContaining('AI todo'), findsOneWidget);
   });
 
+  testWidgets('starts voice recording on pointer down without long-press delay',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          speechChannelProvider.overrideWithValue(_FakeSpeechService(
+            'quick voice',
+            delay: Duration.zero,
+          )),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+
+    final center =
+        tester.getCenter(find.byKey(const Key('voice-press-button')));
+    final gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.byKey(const Key('voice-recording-overlay')), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('conflict draft only shows conflict resolution actions',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -144,11 +177,54 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    expect(find.textContaining('08:00-09:00'), findsOneWidget);
+    expect(find.textContaining('00:00-01:00'), findsNothing);
+
     expect(find.text('时间冲突'), findsOneWidget);
     expect(find.text('保留原日程'), findsOneWidget);
     expect(find.text('删除原日程并保存本次'), findsOneWidget);
     expect(find.text('取消'), findsNothing);
     expect(find.text('保存'), findsNothing);
+  });
+
+  testWidgets('shows compact todo deletion confirmation and deletes matches',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await database.saveTodo(
+      capture: _existingTodoDraft(),
+      rawText: '明天开会',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider.overrideWithValue(
+            _FakeCaptureConversationAgent(capture: _deleteDraft()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), '删除明天开会的提醒');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('准备删除 1 条待办'), findsOneWidget);
+    expect(find.textContaining('08:00 Existing todo'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+    expect(find.text('确认删除'), findsOneWidget);
+
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已删除 1 条待办。'), findsOneWidget);
+    expect(await database.loadTodoBlocks(), isEmpty);
   });
 }
 
@@ -182,7 +258,8 @@ class _FakeCaptureConversationAgent implements CaptureConversationAgent {
 }
 
 class _FakeSpeechService implements VolcengineSpeechService {
-  _FakeSpeechService(this.result, {this.delay = const Duration(milliseconds: 10)});
+  _FakeSpeechService(this.result,
+      {this.delay = const Duration(milliseconds: 10)});
 
   final String result;
   final Duration delay;
@@ -234,8 +311,8 @@ CaptureResult _savableTodoDraft() {
     followUpQuestion: null,
     shouldSave: true,
     todoPayload: TodoPayload(
-      startAt: DateTime(2026, 7, 10, 9),
-      endAt: DateTime(2026, 7, 10, 9, 30),
+      startAt: DateTime.utc(2026, 7, 10, 0),
+      endAt: DateTime.utc(2026, 7, 10, 1),
       location: 'market',
       topic: 'buy fruit',
       reminderAt: null,
@@ -255,13 +332,35 @@ CaptureResult _existingTodoDraft() {
     followUpQuestion: null,
     shouldSave: true,
     todoPayload: TodoPayload(
-      startAt: DateTime(2026, 7, 10, 9),
-      endAt: DateTime(2026, 7, 10, 9, 30),
+      startAt: DateTime.utc(2026, 7, 10, 0),
+      endAt: DateTime.utc(2026, 7, 10, 1),
       location: 'market',
       topic: 'existing',
       reminderAt: null,
       status: 'pending',
     ),
     ideaPayload: null,
+  );
+}
+
+CaptureResult _deleteDraft() {
+  return CaptureResult(
+    intentType: CaptureIntentType.todoDelete,
+    confidence: 0.98,
+    title: '删除明天开会的提醒',
+    summary: '删除明天开会的待办',
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: false,
+    todoPayload: null,
+    ideaPayload: null,
+    todoDeletePayload: TodoDeletePayload(
+      operation: TodoDeleteOperation.delete,
+      dateFrom: DateTime.utc(2026, 7, 10),
+      dateTo: DateTime.utc(2026, 7, 11),
+      timeFrom: null,
+      timeTo: null,
+      keyword: 'Existing',
+    ),
   );
 }

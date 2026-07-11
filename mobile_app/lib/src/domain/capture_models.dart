@@ -1,4 +1,4 @@
-enum CaptureIntentType { todo, idea, unclear }
+enum CaptureIntentType { todo, idea, todoDelete, unclear }
 
 CaptureIntentType captureIntentTypeFromJson(String value) {
   return CaptureIntentType.values.firstWhere(
@@ -62,7 +62,9 @@ class IdeaPayload {
     return IdeaPayload(
       summary: json['summary'] as String? ?? '',
       sourceHint: json['source_hint'] as String?,
-      tags: (json['tags'] as List<dynamic>? ?? const []).map((item) => item.toString()).toList(),
+      tags: (json['tags'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
     );
   }
 
@@ -71,6 +73,56 @@ class IdeaPayload {
       'summary': summary,
       'source_hint': sourceHint,
       'tags': tags,
+    };
+  }
+}
+
+enum TodoDeleteOperation { delete, clear }
+
+TodoDeleteOperation todoDeleteOperationFromJson(String value) {
+  return TodoDeleteOperation.values.firstWhere(
+    (operation) => operation.name == value,
+    orElse: () => TodoDeleteOperation.delete,
+  );
+}
+
+class TodoDeletePayload {
+  const TodoDeletePayload({
+    required this.operation,
+    required this.dateFrom,
+    required this.dateTo,
+    required this.timeFrom,
+    required this.timeTo,
+    required this.keyword,
+  });
+
+  final TodoDeleteOperation operation;
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+  final DateTime? timeFrom;
+  final DateTime? timeTo;
+  final String? keyword;
+
+  factory TodoDeletePayload.fromJson(Map<String, dynamic> json) {
+    return TodoDeletePayload(
+      operation:
+          todoDeleteOperationFromJson(json['operation'] as String? ?? 'delete'),
+      dateFrom: _parseDate(json['date_from']),
+      dateTo: _parseDate(json['date_to']),
+      timeFrom: _parseDate(json['time_from']),
+      timeTo: _parseDate(json['time_to']),
+      keyword: json['keyword'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'operation': operation.name,
+      'date_from': dateFrom?.toIso8601String(),
+      'date_to': dateTo?.toIso8601String(),
+      'time_from': timeFrom?.toIso8601String(),
+      'time_to': timeTo?.toIso8601String(),
+      'keyword': keyword,
     };
   }
 }
@@ -86,6 +138,7 @@ class CaptureResult {
     required this.shouldSave,
     required this.todoPayload,
     required this.ideaPayload,
+    this.todoDeletePayload,
   });
 
   final CaptureIntentType intentType;
@@ -97,14 +150,18 @@ class CaptureResult {
   final bool shouldSave;
   final TodoPayload? todoPayload;
   final IdeaPayload? ideaPayload;
+  final TodoDeletePayload? todoDeletePayload;
 
   factory CaptureResult.fromJson(Map<String, dynamic> json) {
     return CaptureResult(
-      intentType: captureIntentTypeFromJson(json['intent_type'] as String? ?? 'unclear'),
+      intentType: captureIntentTypeFromJson(
+          json['intent_type'] as String? ?? 'unclear'),
       confidence: (json['confidence'] as num? ?? 0).toDouble(),
       title: json['title'] as String? ?? '未命名记录',
       summary: json['summary'] as String? ?? '',
-      missingFields: (json['missing_fields'] as List<dynamic>? ?? const []).map((item) => item.toString()).toList(),
+      missingFields: (json['missing_fields'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
       followUpQuestion: json['follow_up_question'] as String?,
       shouldSave: json['should_save'] as bool? ?? false,
       todoPayload: json['todo_payload'] is Map<String, dynamic>
@@ -112,6 +169,10 @@ class CaptureResult {
           : null,
       ideaPayload: json['idea_payload'] is Map<String, dynamic>
           ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
+          : null,
+      todoDeletePayload: json['todo_delete_payload'] is Map<String, dynamic>
+          ? TodoDeletePayload.fromJson(
+              json['todo_delete_payload'] as Map<String, dynamic>)
           : null,
     );
   }
@@ -127,6 +188,7 @@ class CaptureResult {
       'should_save': shouldSave,
       'todo_payload': todoPayload?.toJson(),
       'idea_payload': ideaPayload?.toJson(),
+      'todo_delete_payload': todoDeletePayload?.toJson(),
     };
   }
 }
@@ -135,5 +197,5 @@ DateTime? _parseDate(dynamic value) {
   if (value is! String || value.isEmpty) {
     return null;
   }
-  return DateTime.tryParse(value);
+  return DateTime.tryParse(value)?.toLocal();
 }

@@ -220,11 +220,14 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
 }
 
 String _dayLabel(DateTime date) {
+  final local = date.toLocal();
+  date = local;
   const weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
   return '${date.month}月${date.day}日 ${weekdays[date.weekday - 1]}';
 }
 
 String _timeLabel(DateTime date) {
+  final local = date.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
-  return '${two(date.hour)}:${two(date.minute)}';
+  return '${two(local.hour)}:${two(local.minute)}';
 }

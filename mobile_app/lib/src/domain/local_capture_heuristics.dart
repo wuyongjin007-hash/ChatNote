@@ -3,6 +3,9 @@ import 'capture_models.dart';
 class LocalCaptureHeuristics {
   CaptureResult extract(String text) {
     final normalized = text.trim();
+    if (_looksLikeTodoDelete(normalized)) {
+      return _todoDeleteResult(normalized);
+    }
     if (_looksLikeWanliIdea(normalized)) {
       return const CaptureResult(
         intentType: CaptureIntentType.idea,
@@ -45,13 +48,16 @@ class LocalCaptureHeuristics {
     return CaptureResult(
       intentType: CaptureIntentType.idea,
       confidence: 0.55,
-      title: normalized.length > 24 ? '${normalized.substring(0, 24)}...' : normalized,
+      title: normalized.length > 24
+          ? '${normalized.substring(0, 24)}...'
+          : normalized,
       summary: normalized,
       missingFields: const [],
       followUpQuestion: null,
       shouldSave: true,
       todoPayload: null,
-      ideaPayload: IdeaPayload(summary: normalized, sourceHint: '本地兜底整理', tags: const ['闪念']),
+      ideaPayload: IdeaPayload(
+          summary: normalized, sourceHint: '本地兜底整理', tags: const ['闪念']),
     );
   }
 
@@ -59,8 +65,74 @@ class LocalCaptureHeuristics {
     return text.contains('万历十五年') && text.contains('中国通史');
   }
 
+  bool _looksLikeTodoDelete(String text) {
+    final hasDeleteVerb =
+        text.contains('删除') || text.contains('清空') || text.contains('取消');
+    final hasTodoObject =
+        text.contains('待办') || text.contains('提醒') || text.contains('日程');
+    return hasDeleteVerb && hasTodoObject;
+  }
+
+  CaptureResult _todoDeleteResult(String text) {
+    final now = DateTime.now();
+    final dayOffset = text.contains('后天')
+        ? 2
+        : text.contains('明天')
+            ? 1
+            : 0;
+    final dateFrom =
+        DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
+    final dateTo = dateFrom.add(const Duration(days: 1));
+    final timeMatch =
+        RegExp(r'(\d{1,2})点(?:到|至|-)(\d{1,2})点?').firstMatch(text);
+    final timeFrom = timeMatch == null
+        ? null
+        : DateTime(dateFrom.year, dateFrom.month, dateFrom.day,
+            int.parse(timeMatch.group(1)!));
+    final timeTo = timeMatch == null
+        ? null
+        : DateTime(dateFrom.year, dateFrom.month, dateFrom.day,
+            int.parse(timeMatch.group(2)!));
+    final operation = text.contains('清空')
+        ? TodoDeleteOperation.clear
+        : TodoDeleteOperation.delete;
+    final keyword =
+        operation == TodoDeleteOperation.clear ? null : _deleteKeyword(text);
+    return CaptureResult(
+      intentType: CaptureIntentType.todoDelete,
+      confidence: 0.62,
+      title: text,
+      summary: text,
+      missingFields: const [],
+      followUpQuestion: null,
+      shouldSave: false,
+      todoPayload: null,
+      ideaPayload: null,
+      todoDeletePayload: TodoDeletePayload(
+        operation: operation,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+        timeFrom: timeFrom,
+        timeTo: timeTo,
+        keyword: keyword,
+      ),
+    );
+  }
+
+  String? _deleteKeyword(String text) {
+    final cleaned = text
+        .replaceAll(RegExp(r'帮我|请|删除|取消|清空|今天|明天|后天'), '')
+        .replaceAll(RegExp(r'\d{1,2}点(?:到|至|-)\d{1,2}点?'), '')
+        .replaceAll(RegExp(r'的?(待办事项|待办|提醒|日程)'), '')
+        .trim();
+    return cleaned.isEmpty ? null : cleaned;
+  }
+
   bool _looksLikeTodo(String text) {
-    return text.contains('开会') || text.contains('待办') || text.contains('提醒') || text.contains('明天');
+    return text.contains('开会') ||
+        text.contains('待办') ||
+        text.contains('提醒') ||
+        text.contains('明天');
   }
 
   String _titleForTodo(String text) {

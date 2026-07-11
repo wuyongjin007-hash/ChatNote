@@ -1,8 +1,10 @@
 import 'capture_models.dart';
 import 'local_capture_heuristics.dart';
 
-typedef CaptureAgentCall = Future<CaptureResult> Function(CaptureAgentRequest request);
-typedef CaptureAgentStreamCall = Stream<CaptureAgentStreamEvent> Function(CaptureAgentRequest request);
+typedef CaptureAgentCall = Future<CaptureResult> Function(
+    CaptureAgentRequest request);
+typedef CaptureAgentStreamCall = Stream<CaptureAgentStreamEvent> Function(
+    CaptureAgentRequest request);
 
 class CaptureAgentRequest {
   const CaptureAgentRequest({
@@ -91,7 +93,8 @@ class CaptureConversationAgent {
       text: normalized,
       conversation: List.unmodifiable(_memory),
       pendingDraft: isFollowUp ? _draft?.toJson() : null,
-      missingFields: isFollowUp ? List.unmodifiable(_draft!.missingFields) : const [],
+      missingFields:
+          isFollowUp ? List.unmodifiable(_draft!.missingFields) : const [],
       isFollowUp: isFollowUp,
     );
 
@@ -133,7 +136,8 @@ class CaptureConversationAgent {
       text: normalized,
       conversation: List.unmodifiable(_memory),
       pendingDraft: isFollowUp ? _draft?.toJson() : null,
-      missingFields: isFollowUp ? List.unmodifiable(_draft!.missingFields) : const [],
+      missingFields:
+          isFollowUp ? List.unmodifiable(_draft!.missingFields) : const [],
       isFollowUp: isFollowUp,
     );
 
@@ -191,6 +195,9 @@ class CaptureConversationAgent {
     if (draft == null) {
       return false;
     }
+    if (draft.intentType == CaptureIntentType.todoDelete) {
+      return false;
+    }
     return draft.missingFields.isNotEmpty || !draft.shouldSave;
   }
 
@@ -207,7 +214,9 @@ class CaptureConversationAgent {
       ..add({'role': 'user', 'content': normalized})
       ..add({
         'role': 'assistant',
-        'content': assistantText.trim().isEmpty ? capture.followUpQuestion ?? capture.summary : assistantText,
+        'content': assistantText.trim().isEmpty
+            ? capture.followUpQuestion ?? capture.summary
+            : assistantText,
       });
 
     return CaptureTurn(

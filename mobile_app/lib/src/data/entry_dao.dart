@@ -182,9 +182,74 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     }).toList(growable: false);
   }
 
+  Future<List<EntryListItem>> findTodosForDeletion(
+      TodoDeletePayload payload) async {
+    final rows = await db.customSelect(
+      '''
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic
+      FROM entries e
+      JOIN todos t ON t.entry_id = e.id
+      WHERE t.start_at IS NOT NULL AND t.end_at IS NOT NULL
+      ORDER BY t.start_at ASC
+      ''',
+      readsFrom: {entries, todos},
+    ).get();
+
+    final keyword = payload.keyword?.trim().toLowerCase();
+    return rows.map(_todoFromRow).where((item) {
+      final start = item.startAt?.toLocal();
+      final end = item.endAt?.toLocal();
+      if (start == null || end == null) {
+        return false;
+      }
+      final dateFrom = payload.dateFrom?.toLocal();
+      final dateTo = payload.dateTo?.toLocal();
+      if (dateFrom != null && start.isBefore(dateFrom)) {
+        return false;
+      }
+      if (dateTo != null && !start.isBefore(dateTo)) {
+        return false;
+      }
+      final timeFrom = payload.timeFrom?.toLocal();
+      final timeTo = payload.timeTo?.toLocal();
+      if (timeFrom != null &&
+          timeTo != null &&
+          !(start.isBefore(timeTo) && end.isAfter(timeFrom))) {
+        return false;
+      }
+      if (keyword != null && keyword.isNotEmpty) {
+        final searchable = [
+          item.title,
+          item.topic ?? '',
+          item.location ?? '',
+          item.rawText,
+          item.normalizedText,
+        ].join('\n').toLowerCase();
+        if (!searchable.contains(keyword)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList(growable: false);
+  }
+
+  Future<void> deleteTodos(List<String> ids) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await transaction(() async {
+      for (final id in ids) {
+        await db
+            .customStatement('DELETE FROM entry_fts WHERE entry_id = ?', [id]);
+        await (delete(entries)..where((table) => table.id.equals(id))).go();
+      }
+    });
+  }
+
   Future<void> deleteEntry(String id) async {
     await transaction(() async {
-      await db.customStatement('DELETE FROM entry_fts WHERE entry_id = ?', [id]);
+      await db
+          .customStatement('DELETE FROM entry_fts WHERE entry_id = ?', [id]);
       await (delete(entries)..where((table) => table.id.equals(id))).go();
     });
   }
@@ -233,8 +298,10 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       return;
     }
     final tagId = 'tag:$normalized';
-    await into(tags).insertOnConflictUpdate(TagsCompanion.insert(id: tagId, name: normalized));
-    await into(entryTags).insertOnConflictUpdate(EntryTagsCompanion.insert(entryId: entryId, tagId: tagId));
+    await into(tags).insertOnConflictUpdate(
+        TagsCompanion.insert(id: tagId, name: normalized));
+    await into(entryTags).insertOnConflictUpdate(
+        EntryTagsCompanion.insert(entryId: entryId, tagId: tagId));
   }
 
   Future<List<String>> _tagsForEntry(String entryId) async {
@@ -256,7 +323,8 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   Future<List<QueryRow>> _searchIdeasByText(String trimmed) async {
     final isFts = await db.entryFtsUsesFts5();
     if (!isFts) {
-      final likeQuery = '%${trimmed.replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
+      final likeQuery =
+          '%${trimmed.replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
       return db.customSelect(
         '''
         SELECT e.*, i.summary, i.source_hint
@@ -328,5 +396,9 @@ DateTime? _readDate(QueryRow row, String column) {
 }
 
 String _ftsQuery(String value) {
-  return value.replaceAll('"', ' ').split(RegExp(r'\s+')).where((part) => part.isNotEmpty).join(' ');
+  return value
+      .replaceAll('"', ' ')
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .join(' ');
 }

@@ -24,10 +24,21 @@ class EntryRepository {
 
   Future<String> saveCapture(CaptureResult capture, String rawText) {
     return switch (capture.intentType) {
-      CaptureIntentType.todo => _database.saveTodo(capture: capture, rawText: rawText),
-      CaptureIntentType.idea => _database.saveIdea(capture: capture, rawText: rawText),
+      CaptureIntentType.todo =>
+        _database.saveTodo(capture: capture, rawText: rawText),
+      CaptureIntentType.idea =>
+        _database.saveIdea(capture: capture, rawText: rawText),
+      CaptureIntentType.todoDelete => throw StateError('删除请求不能作为新记录保存'),
       CaptureIntentType.unclear => throw StateError('无法保存未明确分类的记录'),
     };
+  }
+
+  Future<List<EntryListItem>> findTodosForDeletion(TodoDeletePayload payload) {
+    return _database.findTodosForDeletion(payload);
+  }
+
+  Future<void> deleteTodos(List<String> ids) {
+    return _database.deleteTodos(ids);
   }
 
   Future<List<EntryListItem>> loadUpcomingTodos() {

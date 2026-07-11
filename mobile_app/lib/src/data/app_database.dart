@@ -64,6 +64,14 @@ class AppDatabase extends _$AppDatabase {
     return entryDao.loadTodoBlocks();
   }
 
+  Future<List<EntryListItem>> findTodosForDeletion(TodoDeletePayload payload) {
+    return entryDao.findTodosForDeletion(payload);
+  }
+
+  Future<void> deleteTodos(List<String> ids) {
+    return entryDao.deleteTodos(ids);
+  }
+
   Future<void> deleteEntry(String id) {
     return entryDao.deleteEntry(id);
   }
@@ -76,7 +84,8 @@ class AppDatabase extends _$AppDatabase {
     final rows = await customSelect(
       "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'entry_fts'",
     ).get();
-    final statement = rows.isEmpty ? '' : rows.single.readNullable<String>('sql') ?? '';
+    final statement =
+        rows.isEmpty ? '' : rows.single.readNullable<String>('sql') ?? '';
     return statement.toUpperCase().contains('VIRTUAL TABLE');
   }
 
