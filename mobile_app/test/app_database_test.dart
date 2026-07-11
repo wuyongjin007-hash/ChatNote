@@ -102,6 +102,48 @@ void main() {
         hasLength(1));
     expect(await database.searchIdeas('项目会议'), hasLength(1));
   });
+  test('saves multiple todos from one capture result', () async {
+    final ids = await database.saveTodos(
+      capture: CaptureResult(
+        intentType: CaptureIntentType.todo,
+        confidence: 0.98,
+        title: 'July 11 todos',
+        summary: 'Two todos from one message',
+        missingFields: const [],
+        followUpQuestion: null,
+        shouldSave: true,
+        todoPayload: null,
+        todoPayloads: [
+          TodoPayload(
+            startAt: DateTime(2026, 7, 11, 11),
+            endAt: DateTime(2026, 7, 11, 11, 30),
+            location: 'office',
+            topic: 'report',
+            reminderAt: null,
+            status: 'pending',
+          ),
+          TodoPayload(
+            startAt: DateTime(2026, 7, 11, 15),
+            endAt: DateTime(2026, 7, 11, 15, 30),
+            location: 'market',
+            topic: 'buy fruit',
+            reminderAt: null,
+            status: 'pending',
+          ),
+        ],
+        ideaPayload: null,
+      ),
+      rawText:
+          'July 11 add two todos: report at 11 and buy fruit at 3 in the afternoon.',
+    );
+
+    final todos =
+        await database.loadTodos(DateTime(2026, 7, 11), DateTime(2026, 7, 12));
+
+    expect(ids, hasLength(2));
+    expect(todos.map((todo) => todo.topic), ['report', 'buy fruit']);
+    expect(todos.map((todo) => todo.rawText).toSet(), hasLength(1));
+  });
 }
 
 CaptureResult _todo(String title, DateTime start, DateTime end,

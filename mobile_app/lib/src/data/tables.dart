@@ -13,7 +13,9 @@ class CaptureSessions extends Table {
 
 class Entries extends Table {
   late final TextColumn id = text()();
-  late final TextColumn entryType = text().named('type').customConstraint("NOT NULL CHECK (type IN ('todo', 'idea'))")();
+  late final TextColumn entryType = text()
+      .named('type')
+      .customConstraint("NOT NULL CHECK (type IN ('todo', 'idea'))")();
   late final TextColumn title = text()();
   late final TextColumn rawText = text()();
   late final TextColumn normalizedText = text()();
@@ -25,7 +27,8 @@ class Entries extends Table {
 }
 
 class Todos extends Table {
-  late final TextColumn entryId = text().references(Entries, #id, onDelete: KeyAction.cascade)();
+  late final TextColumn entryId =
+      text().references(Entries, #id, onDelete: KeyAction.cascade)();
   late final TextColumn startAt = text().nullable()();
   late final TextColumn endAt = text().nullable()();
   late final TextColumn location = text().nullable()();
@@ -38,10 +41,12 @@ class Todos extends Table {
 }
 
 class Ideas extends Table {
-  late final TextColumn entryId = text().references(Entries, #id, onDelete: KeyAction.cascade)();
+  late final TextColumn entryId =
+      text().references(Entries, #id, onDelete: KeyAction.cascade)();
   late final TextColumn summary = text()();
   late final TextColumn sourceHint = text().nullable()();
-  late final BoolColumn favorite = boolean().withDefault(const Constant(false))();
+  late final BoolColumn favorite =
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {entryId};
@@ -56,8 +61,10 @@ class Tags extends Table {
 }
 
 class EntryTags extends Table {
-  late final TextColumn entryId = text().references(Entries, #id, onDelete: KeyAction.cascade)();
-  late final TextColumn tagId = text().references(Tags, #id, onDelete: KeyAction.cascade)();
+  late final TextColumn entryId =
+      text().references(Entries, #id, onDelete: KeyAction.cascade)();
+  late final TextColumn tagId =
+      text().references(Tags, #id, onDelete: KeyAction.cascade)();
 
   @override
   Set<Column<Object>> get primaryKey => {entryId, tagId};

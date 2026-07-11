@@ -49,37 +49,69 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     required CaptureResult capture,
     required String rawText,
   }) async {
-    final todo = capture.todoPayload;
-    if (todo == null) {
+    final ids = await saveTodos(capture: capture, rawText: rawText);
+    return ids.first;
+  }
+
+  Future<List<String>> saveTodos({
+    required CaptureResult capture,
+    required String rawText,
+  }) async {
+    final todos = capture.effectiveTodoPayloads;
+    if (todos.isEmpty) {
       throw ArgumentError('todo_payload is required for todo entries');
     }
-    final entryId = _uuid.v4();
+    final entryIds = <String>[];
     final now = DateTime.now().toIso8601String();
 
     await transaction(() async {
-      await _insertEntry(
-        id: entryId,
-        type: 'todo',
-        title: capture.title,
-        rawText: rawText,
-        normalizedText: capture.summary,
-        createdAt: now,
-        updatedAt: now,
-      );
-      await into(todos).insert(
-        TodosCompanion(
-          entryId: Value(entryId),
-          startAt: Value(todo.startAt?.toIso8601String()),
-          endAt: Value(todo.endAt?.toIso8601String()),
-          location: Value(todo.location),
-          topic: Value(todo.topic),
-          reminderAt: Value(todo.reminderAt?.toIso8601String()),
-          status: Value(todo.status),
-        ),
-      );
+      for (final todo in todos) {
+        final entryId = _uuid.v4();
+        entryIds.add(entryId);
+        await _insertTodoEntry(
+          entryId: entryId,
+          capture: capture,
+          todo: todo,
+          rawText: rawText,
+          now: now,
+        );
+      }
     });
 
-    return entryId;
+    return entryIds;
+  }
+
+  Future<void> _insertTodoEntry({
+    required String entryId,
+    required CaptureResult capture,
+    required TodoPayload todo,
+    required String rawText,
+    required String now,
+  }) async {
+    await _insertEntry(
+      id: entryId,
+      type: 'todo',
+      title: todo.title?.trim().isNotEmpty == true
+          ? todo.title!.trim()
+          : capture.title,
+      rawText: rawText,
+      normalizedText: todo.summary?.trim().isNotEmpty == true
+          ? todo.summary!.trim()
+          : capture.summary,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await into(todos).insert(
+      TodosCompanion(
+        entryId: Value(entryId),
+        startAt: Value(todo.startAt?.toIso8601String()),
+        endAt: Value(todo.endAt?.toIso8601String()),
+        location: Value(todo.location),
+        topic: Value(todo.topic),
+        reminderAt: Value(todo.reminderAt?.toIso8601String()),
+        status: Value(todo.status),
+      ),
+    );
   }
 
   Future<String> saveIdea({

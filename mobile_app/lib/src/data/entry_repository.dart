@@ -8,26 +8,34 @@ class EntryRepository {
   final AppDatabase _database;
 
   Future<List<TodoTimeBlock>> conflictsFor(CaptureResult capture) async {
-    final todo = capture.todoPayload;
-    if (todo?.startAt == null || todo?.endAt == null) {
+    final todos = capture.effectiveTodoPayloads
+        .where((todo) => todo.startAt != null && todo.endAt != null)
+        .toList(growable: false);
+    if (todos.isEmpty) {
       return const [];
     }
-    final candidate = TodoTimeBlock(
-      id: 'candidate',
-      title: capture.title,
-      startAt: todo!.startAt!,
-      endAt: todo.endAt!,
-    );
     final existing = await _database.loadTodoBlocks();
-    return findTodoConflicts(candidate, existing);
+    final conflicts = <TodoTimeBlock>[];
+    for (var index = 0; index < todos.length; index++) {
+      final todo = todos[index];
+      final candidate = TodoTimeBlock(
+        id: 'candidate:$index',
+        title: todo.title ?? capture.title,
+        startAt: todo.startAt!,
+        endAt: todo.endAt!,
+      );
+      conflicts.addAll(findTodoConflicts(candidate, existing));
+    }
+    return conflicts;
   }
 
-  Future<String> saveCapture(CaptureResult capture, String rawText) {
+  Future<List<String>> saveCapture(CaptureResult capture, String rawText) {
     return switch (capture.intentType) {
       CaptureIntentType.todo =>
-        _database.saveTodo(capture: capture, rawText: rawText),
-      CaptureIntentType.idea =>
-        _database.saveIdea(capture: capture, rawText: rawText),
+        _database.saveTodos(capture: capture, rawText: rawText),
+      CaptureIntentType.idea => _database
+          .saveIdea(capture: capture, rawText: rawText)
+          .then((id) => [id]),
       CaptureIntentType.todoDelete => throw StateError('删除请求不能作为新记录保存'),
       CaptureIntentType.unclear => throw StateError('无法保存未明确分类的记录'),
     };

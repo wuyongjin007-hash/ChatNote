@@ -45,4 +45,70 @@ void main() {
     expect(find.textContaining('08:00-09:00'), findsOneWidget);
     expect(find.textContaining('00:00-01:00'), findsNothing);
   });
+
+  testWidgets('shows today section before older todos', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 9);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    await database.saveTodo(
+      capture: _todoCapture(
+        title: 'Yesterday todo',
+        startAt: yesterday,
+        endAt: yesterday.add(const Duration(minutes: 30)),
+      ),
+      rawText: 'yesterday',
+    );
+    await database.saveTodo(
+      capture: _todoCapture(
+        title: 'Today todo',
+        startAt: today,
+        endAt: today.add(const Duration(minutes: 30)),
+      ),
+      rawText: 'today',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: TodoQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final todayTop =
+        tester.getTopLeft(find.byKey(const Key('todo-day-today-header'))).dy;
+    final yesterdayTop = tester
+        .getTopLeft(find.byKey(const Key('todo-day-yesterday-header')))
+        .dy;
+
+    expect(todayTop, lessThan(yesterdayTop));
+  });
+}
+
+CaptureResult _todoCapture({
+  required String title,
+  required DateTime startAt,
+  required DateTime endAt,
+}) {
+  return CaptureResult(
+    intentType: CaptureIntentType.todo,
+    confidence: 0.98,
+    title: title,
+    summary: title,
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: true,
+    todoPayload: TodoPayload(
+      startAt: startAt,
+      endAt: endAt,
+      location: null,
+      topic: title,
+      reminderAt: null,
+      status: 'draft',
+    ),
+    ideaPayload: null,
+  );
 }

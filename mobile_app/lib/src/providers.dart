@@ -23,7 +23,8 @@ final settingsStoreProvider = Provider<SettingsStore>((ref) {
   return SettingsStore();
 });
 
-final volcengineArkCaptureClientProvider = Provider<VolcengineArkCaptureClient>((ref) {
+final volcengineArkCaptureClientProvider =
+    Provider<VolcengineArkCaptureClient>((ref) {
   return VolcengineArkCaptureClient(ref.watch(settingsStoreProvider));
 });
 
@@ -31,7 +32,8 @@ final localCaptureHeuristicsProvider = Provider<LocalCaptureHeuristics>((ref) {
   return LocalCaptureHeuristics();
 });
 
-final captureConversationAgentProvider = Provider<CaptureConversationAgent>((ref) {
+final captureConversationAgentProvider =
+    Provider<CaptureConversationAgent>((ref) {
   final arkClient = ref.watch(volcengineArkCaptureClientProvider);
   return CaptureConversationAgent(
     heuristics: ref.watch(localCaptureHeuristicsProvider),
@@ -47,12 +49,12 @@ final captureConversationAgentProvider = Provider<CaptureConversationAgent>((ref
     captureStream: (request) {
       return arkClient
           .captureTextStream(
-            text: request.text,
-            conversation: request.conversation,
-            pendingDraft: request.pendingDraft,
-            missingFields: request.missingFields,
-            isFollowUp: request.isFollowUp,
-          )
+        text: request.text,
+        conversation: request.conversation,
+        pendingDraft: request.pendingDraft,
+        missingFields: request.missingFields,
+        isFollowUp: request.isFollowUp,
+      )
           .map((event) {
         if (event is ArkAssistantDelta) {
           return CaptureAgentAssistantDelta(event.text);
@@ -66,7 +68,8 @@ final captureConversationAgentProvider = Provider<CaptureConversationAgent>((ref
   );
 });
 
-final volcengineArkFilesClientProvider = Provider<VolcengineArkFilesClient>((ref) {
+final volcengineArkFilesClientProvider =
+    Provider<VolcengineArkFilesClient>((ref) {
   return VolcengineArkFilesClient(ref.watch(settingsStoreProvider));
 });
 

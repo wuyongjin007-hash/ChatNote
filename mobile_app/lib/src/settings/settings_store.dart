@@ -3,7 +3,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../local_config.dart';
 
 class SettingsStore {
-  SettingsStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
+  SettingsStore({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
 
   static const _volcengineArkApiKeyKey = 'volcengine_ark_api_key';
   static const _volcengineArkBaseUrlKey = 'volcengine_ark_base_url';
@@ -26,26 +27,32 @@ class SettingsStore {
   }
 
   Future<String> volcengineArkBaseUrl() async {
-    return await _storage.read(key: _volcengineArkBaseUrlKey) ?? 'https://ark.cn-beijing.volces.com/api/v3';
+    return await _storage.read(key: _volcengineArkBaseUrlKey) ??
+        'https://ark.cn-beijing.volces.com/api/v3';
   }
 
   Future<void> setVolcengineArkBaseUrl(String value) {
     return _storage.write(
       key: _volcengineArkBaseUrlKey,
-      value: value.trim().isEmpty ? 'https://ark.cn-beijing.volces.com/api/v3' : value.trim(),
+      value: value.trim().isEmpty
+          ? 'https://ark.cn-beijing.volces.com/api/v3'
+          : value.trim(),
     );
   }
 
   Future<String> volcengineArkSpeechModel() async {
-    return await _storage.read(key: _volcengineArkSpeechModelKey) ?? 'doubao-seed-2-0-lite-260428';
+    return await _storage.read(key: _volcengineArkSpeechModelKey) ??
+        'doubao-seed-2-0-lite-260428';
   }
 
   Future<void> setVolcengineArkSpeechModel(String value) {
-    return _storage.write(key: _volcengineArkSpeechModelKey, value: value.trim());
+    return _storage.write(
+        key: _volcengineArkSpeechModelKey, value: value.trim());
   }
 
   Future<String> volcengineArkTextModel() async {
-    return await _storage.read(key: _volcengineArkTextModelKey) ?? 'doubao-seed-2-1-pro-260628';
+    return await _storage.read(key: _volcengineArkTextModelKey) ??
+        'doubao-seed-2-1-pro-260628';
   }
 
   Future<void> setVolcengineArkTextModel(String value) {
@@ -57,6 +64,7 @@ class SettingsStore {
   }
 
   Future<void> setDatabaseEncryptionEnabled(bool value) {
-    return _storage.write(key: _databaseEncryptionEnabledKey, value: value.toString());
+    return _storage.write(
+        key: _databaseEncryptionEnabledKey, value: value.toString());
   }
 }

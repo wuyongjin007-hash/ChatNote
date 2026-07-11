@@ -12,11 +12,13 @@ class TodoTimeBlock {
   final DateTime endAt;
 }
 
-List<TodoTimeBlock> findTodoConflicts(TodoTimeBlock candidate, Iterable<TodoTimeBlock> existing) {
+List<TodoTimeBlock> findTodoConflicts(
+    TodoTimeBlock candidate, Iterable<TodoTimeBlock> existing) {
   return existing.where((block) {
     if (block.id == candidate.id) {
       return false;
     }
-    return block.startAt.isBefore(candidate.endAt) && block.endAt.isAfter(candidate.startAt);
+    return block.startAt.isBefore(candidate.endAt) &&
+        block.endAt.isAfter(candidate.startAt);
   }).toList(growable: false);
 }

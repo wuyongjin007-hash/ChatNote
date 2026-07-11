@@ -9,6 +9,8 @@ CaptureIntentType captureIntentTypeFromJson(String value) {
 
 class TodoPayload {
   const TodoPayload({
+    this.title,
+    this.summary,
     required this.startAt,
     required this.endAt,
     required this.location,
@@ -17,6 +19,8 @@ class TodoPayload {
     required this.status,
   });
 
+  final String? title;
+  final String? summary;
   final DateTime? startAt;
   final DateTime? endAt;
   final String? location;
@@ -26,6 +30,8 @@ class TodoPayload {
 
   factory TodoPayload.fromJson(Map<String, dynamic> json) {
     return TodoPayload(
+      title: json['title'] as String?,
+      summary: json['summary'] as String?,
       startAt: _parseDate(json['start_at']),
       endAt: _parseDate(json['end_at']),
       location: json['location'] as String?,
@@ -37,6 +43,8 @@ class TodoPayload {
 
   Map<String, dynamic> toJson() {
     return {
+      'title': title,
+      'summary': summary,
       'start_at': startAt?.toIso8601String(),
       'end_at': endAt?.toIso8601String(),
       'location': location,
@@ -138,6 +146,7 @@ class CaptureResult {
     required this.shouldSave,
     required this.todoPayload,
     required this.ideaPayload,
+    this.todoPayloads = const [],
     this.todoDeletePayload,
   });
 
@@ -149,10 +158,26 @@ class CaptureResult {
   final String? followUpQuestion;
   final bool shouldSave;
   final TodoPayload? todoPayload;
+  final List<TodoPayload> todoPayloads;
   final IdeaPayload? ideaPayload;
   final TodoDeletePayload? todoDeletePayload;
 
+  List<TodoPayload> get effectiveTodoPayloads {
+    if (todoPayloads.isNotEmpty) {
+      return todoPayloads;
+    }
+    final single = todoPayload;
+    return single == null ? const [] : [single];
+  }
+
   factory CaptureResult.fromJson(Map<String, dynamic> json) {
+    final todoPayload = json['todo_payload'] is Map<String, dynamic>
+        ? TodoPayload.fromJson(json['todo_payload'] as Map<String, dynamic>)
+        : null;
+    final todoPayloads = (json['todo_payloads'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(TodoPayload.fromJson)
+        .toList(growable: false);
     return CaptureResult(
       intentType: captureIntentTypeFromJson(
           json['intent_type'] as String? ?? 'unclear'),
@@ -164,9 +189,9 @@ class CaptureResult {
           .toList(),
       followUpQuestion: json['follow_up_question'] as String?,
       shouldSave: json['should_save'] as bool? ?? false,
-      todoPayload: json['todo_payload'] is Map<String, dynamic>
-          ? TodoPayload.fromJson(json['todo_payload'] as Map<String, dynamic>)
-          : null,
+      todoPayload:
+          todoPayload ?? (todoPayloads.isEmpty ? null : todoPayloads.first),
+      todoPayloads: todoPayloads,
       ideaPayload: json['idea_payload'] is Map<String, dynamic>
           ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
           : null,
@@ -187,6 +212,8 @@ class CaptureResult {
       'follow_up_question': followUpQuestion,
       'should_save': shouldSave,
       'todo_payload': todoPayload?.toJson(),
+      'todo_payloads':
+          todoPayloads.map((todo) => todo.toJson()).toList(growable: false),
       'idea_payload': ideaPayload?.toJson(),
       'todo_delete_payload': todoDeletePayload?.toJson(),
     };

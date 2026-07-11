@@ -183,7 +183,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     if (replaceConflictId != null) {
       await ref.read(databaseProvider).deleteEntry(replaceConflictId);
     }
-    await repository.saveCapture(draft, rawText);
+    final savedIds = await repository.saveCapture(draft, rawText);
     ref.read(captureConversationAgentProvider).reset();
     setState(() {
       _draft = null;
@@ -191,7 +191,9 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _conflicts = const [];
       _aiBusy = false;
       _voiceStage = _VoiceStage.idle;
-      _messages.add(const _ChatMessage.assistant('已保存到手机本地。'));
+      _messages.add(_ChatMessage.assistant(savedIds.length > 1
+          ? 'Saved ${savedIds.length} todos locally.'
+          : 'Saved locally.'));
     });
     _scrollToBottom();
   }
@@ -480,6 +482,8 @@ class _DraftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTodo = draft.intentType == CaptureIntentType.todo;
+    final todoPayloads = draft.effectiveTodoPayloads;
+    final isBatchTodo = isTodo && todoPayloads.length > 1;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 12),
       child: Padding(
@@ -492,12 +496,35 @@ class _DraftCard extends StatelessWidget {
                 Icon(isTodo ? Icons.event_available : Icons.lightbulb_outline),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text(draft.title,
+                    child: Text(
+                        isBatchTodo
+                            ? '准备保存 ${todoPayloads.length} 条待办'
+                            : draft.title,
                         style: Theme.of(context).textTheme.titleMedium)),
               ],
             ),
             const SizedBox(height: 8),
             Text(draft.summary),
+            if (isBatchTodo) ...[
+              const SizedBox(height: 10),
+              for (final todo in todoPayloads)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _shortTime(todo.startAt),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(todo.title ?? todo.topic ?? draft.title),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
             if (draft.missingFields.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('缺少信息：${draft.missingFields.join('、')}',
@@ -683,17 +710,18 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      key: const Key('voice-input-strip'),
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(31),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xffe5e7eb)),
         boxShadow: [
           BoxShadow(
             color: colorScheme.primary.withValues(alpha: 0.08),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -745,19 +773,27 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
                       onPointerUp: _handleVoicePointerUp,
                       onPointerCancel: _handleVoicePointerCancel,
                       child: Container(
-                        height: 46,
+                        height: 44,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xfff8fafc),
-                          borderRadius: BorderRadius.circular(23),
+                          color: const Color(0xfff7f8fb),
+                          borderRadius: BorderRadius.circular(11),
                         ),
-                        child: const Text(
-                          '按住说话',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xff111827),
-                          ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _SideSignalIcon(),
+                            SizedBox(width: 8),
+                            Text(
+                              '按住说话',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xff111827),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -767,16 +803,60 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
           IconButton(
             key: const Key('voice-mode-toggle-button'),
             onPressed: widget.enabled ? widget.onToggleMode : null,
-            icon: Icon(
-              widget.isTextMode
-                  ? Icons.keyboard_voice_outlined
-                  : Icons.keyboard_alt_outlined,
-            ),
+            icon: widget.isTextMode
+                ? const _SideSignalIcon()
+                : const Icon(Icons.keyboard_alt_outlined),
             tooltip: widget.isTextMode ? '切换到语音输入' : '切换到文字输入',
           ),
         ],
       ),
     );
+  }
+}
+
+class _SideSignalIcon extends StatelessWidget {
+  const _SideSignalIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      key: const Key('voice-side-signal-icon'),
+      size: const Size(28, 28),
+      painter: _SideSignalPainter(
+        color: IconTheme.of(context).color ?? const Color(0xff111827),
+      ),
+    );
+  }
+}
+
+class _SideSignalPainter extends CustomPainter {
+  const _SideSignalPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    final center = Offset(size.width * 0.35, size.height * 0.5);
+    for (final radius in [5.0, 9.0, 13.0]) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -0.82,
+        1.64,
+        false,
+        paint,
+      );
+    }
+    canvas.drawCircle(center, 1.8, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SideSignalPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 

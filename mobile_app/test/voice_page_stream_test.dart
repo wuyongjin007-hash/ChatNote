@@ -43,6 +43,29 @@ void main() {
     expect(find.text('发送消息或按住说话...'), findsOneWidget);
   });
 
+  testWidgets('renders voice input as a compact rectangular strip',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('voice-input-strip')), findsOneWidget);
+    expect(find.byKey(const Key('voice-side-signal-icon')), findsOneWidget);
+  });
+
   testWidgets('streams assistant text and shows a draft card after completion',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -226,6 +249,42 @@ void main() {
     expect(find.text('已删除 1 条待办。'), findsOneWidget);
     expect(await database.loadTodoBlocks(), isEmpty);
   });
+
+  testWidgets('shows and saves multiple todo drafts from one message',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider.overrideWithValue(
+            _FakeCaptureConversationAgent(capture: _batchTodoDraft()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'add two todos');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('准备保存 2 条待办'), findsOneWidget);
+    expect(find.text('Office report'), findsOneWidget);
+    expect(find.text('Buy fruit'), findsOneWidget);
+
+    await tester.tap(find.byType(FilledButton).last);
+    await tester.pumpAndSettle();
+
+    final todos =
+        await database.loadTodos(DateTime(2026, 7, 11), DateTime(2026, 7, 12));
+    expect(todos.map((todo) => todo.title), ['Office report', 'Buy fruit']);
+  });
 }
 
 class _FakeCaptureConversationAgent implements CaptureConversationAgent {
@@ -362,5 +421,41 @@ CaptureResult _deleteDraft() {
       timeTo: null,
       keyword: 'Existing',
     ),
+  );
+}
+
+CaptureResult _batchTodoDraft() {
+  return CaptureResult(
+    intentType: CaptureIntentType.todo,
+    confidence: 0.98,
+    title: 'Two todos',
+    summary: 'Add two todos on the same day',
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: true,
+    todoPayload: null,
+    todoPayloads: [
+      TodoPayload(
+        title: 'Office report',
+        summary: 'Go to the office to prepare a report',
+        startAt: DateTime(2026, 7, 11, 11),
+        endAt: DateTime(2026, 7, 11, 11, 30),
+        location: 'office',
+        topic: 'report',
+        reminderAt: null,
+        status: 'pending',
+      ),
+      TodoPayload(
+        title: 'Buy fruit',
+        summary: 'Buy fruit at the market',
+        startAt: DateTime(2026, 7, 11, 15),
+        endAt: DateTime(2026, 7, 11, 15, 30),
+        location: 'market',
+        topic: 'buy fruit',
+        reminderAt: null,
+        status: 'pending',
+      ),
+    ],
+    ideaPayload: null,
   );
 }

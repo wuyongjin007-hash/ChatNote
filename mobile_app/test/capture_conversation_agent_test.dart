@@ -8,7 +8,8 @@ void main() {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
       heuristics: LocalCaptureHeuristics(),
-      capture: (request) async => throw StateError('non-streaming path should not be used'),
+      capture: (request) async =>
+          throw StateError('non-streaming path should not be used'),
       captureStream: (request) {
         requests.add(request);
         return Stream.fromIterable([
@@ -27,18 +28,25 @@ void main() {
 
     final events = await agent.submitTextStream('明天上午九点开会').toList();
 
-    expect(events.whereType<CaptureAgentAssistantDelta>().map((event) => event.text).join(), '我先整理一下，还需要地点。');
+    expect(
+        events
+            .whereType<CaptureAgentAssistantDelta>()
+            .map((event) => event.text)
+            .join(),
+        '我先整理一下，还需要地点。');
     final done = events.whereType<CaptureAgentTurnDone>().single;
     expect(done.turn.capture.missingFields, ['location']);
     expect(done.turn.rawTranscript, '明天上午九点开会');
     expect(requests.single.isFollowUp, isFalse);
   });
 
-  test('streaming follow-up uses the previous incomplete draft as memory', () async {
+  test('streaming follow-up uses the previous incomplete draft as memory',
+      () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
       heuristics: LocalCaptureHeuristics(),
-      capture: (request) async => throw StateError('non-streaming path should not be used'),
+      capture: (request) async =>
+          throw StateError('non-streaming path should not be used'),
       captureStream: (request) {
         requests.add(request);
         if (requests.length == 1) {
@@ -82,7 +90,9 @@ void main() {
     expect(requests[1].missingFields, ['location']);
   });
 
-  test('uses the previous incomplete draft as short-term memory for follow-up answers', () async {
+  test(
+      'uses the previous incomplete draft as short-term memory for follow-up answers',
+      () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
       heuristics: LocalCaptureHeuristics(),
@@ -117,7 +127,8 @@ void main() {
     expect(requests[1].isFollowUp, isTrue);
     expect(requests[1].missingFields, ['start_at', 'location', 'topic']);
     expect(requests[1].pendingDraft?['title'], '补充会议安排');
-    expect(requests[1].conversation.map((message) => message['role']), containsAllInOrder(['user', 'assistant']));
+    expect(requests[1].conversation.map((message) => message['role']),
+        containsAllInOrder(['user', 'assistant']));
   });
 
   test('reset clears short-term memory before the next capture', () async {

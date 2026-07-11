@@ -57,4 +57,42 @@ void main() {
     expect(capture.todoDeletePayload?.dateFrom?.hour, 0);
     expect(capture.todoDeletePayload?.dateTo?.day, 13);
   });
+
+  test('parses multiple todo payloads from one model result', () {
+    final capture = CaptureResult.fromJson({
+      'intent_type': 'todo',
+      'confidence': 0.98,
+      'title': 'Two todos on July 11',
+      'summary': 'Add a report todo and a shopping todo',
+      'missing_fields': <String>[],
+      'follow_up_question': null,
+      'should_save': true,
+      'todo_payload': null,
+      'todo_payloads': [
+        {
+          'start_at': '2026-07-11T11:00:00+08:00',
+          'end_at': '2026-07-11T11:30:00+08:00',
+          'location': 'office',
+          'topic': 'report',
+          'reminder_at': null,
+          'status': 'draft',
+        },
+        {
+          'start_at': '2026-07-11T15:00:00+08:00',
+          'end_at': '2026-07-11T15:30:00+08:00',
+          'location': 'market',
+          'topic': 'buy fruit',
+          'reminder_at': null,
+          'status': 'draft',
+        },
+      ],
+      'idea_payload': null,
+    });
+
+    expect(capture.todoPayloads, hasLength(2));
+    expect(capture.todoPayloads.first.startAt?.hour, 11);
+    expect(capture.todoPayloads.last.location, 'market');
+    expect(capture.effectiveTodoPayloads.map((todo) => todo.topic),
+        ['report', 'buy fruit']);
+  });
 }

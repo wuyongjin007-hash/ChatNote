@@ -8,12 +8,14 @@ import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/settings/settings_store.dart';
 
 void main() {
-  test('streams visible assistant text and parses hidden capture json', () async {
+  test('streams visible assistant text and parses hidden capture json',
+      () async {
     late Map<String, dynamic> requestBody;
     final client = VolcengineArkCaptureClient(
       _FakeSettingsStore(),
       httpClient: MockClient.streaming((request, bodyStream) async {
-        requestBody = jsonDecode(await utf8.decodeStream(bodyStream)) as Map<String, dynamic>;
+        requestBody = jsonDecode(await utf8.decodeStream(bodyStream))
+            as Map<String, dynamic>;
         return http.StreamedResponse(
           Stream.fromIterable([
             _sseChunk('我理解这是一个待办，'),
@@ -39,14 +41,17 @@ void main() {
         .toList();
 
     expect(requestBody['stream'], isTrue);
-    expect(events.whereType<ArkAssistantDelta>().map((event) => event.text).join(), '我理解这是一个待办，还需要补充地点。');
+    expect(
+        events.whereType<ArkAssistantDelta>().map((event) => event.text).join(),
+        '我理解这是一个待办，还需要补充地点。');
     final done = events.whereType<ArkCaptureDone>().single;
     expect(done.capture.intentType, CaptureIntentType.todo);
     expect(done.capture.title, '预算会议');
     expect(done.capture.missingFields, ['location']);
   });
 
-  test('throws when a streaming response ends without hidden capture json', () async {
+  test('throws when a streaming response ends without hidden capture json',
+      () async {
     final client = VolcengineArkCaptureClient(
       _FakeSettingsStore(),
       httpClient: MockClient.streaming((request, bodyStream) async {

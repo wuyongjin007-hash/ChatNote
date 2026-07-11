@@ -45,6 +45,13 @@ class AppDatabase extends _$AppDatabase {
     return entryDao.saveTodo(capture: capture, rawText: rawText);
   }
 
+  Future<List<String>> saveTodos({
+    required CaptureResult capture,
+    required String rawText,
+  }) {
+    return entryDao.saveTodos(capture: capture, rawText: rawText);
+  }
+
   Future<String> saveIdea({
     required CaptureResult capture,
     required String rawText,

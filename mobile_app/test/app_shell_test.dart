@@ -7,8 +7,7 @@ import 'package:local_idea_capture/src/data/app_database.dart';
 import 'package:local_idea_capture/src/providers.dart';
 
 void main() {
-  testWidgets(
-      'shows record todo and idea as top-level drawer destinations',
+  testWidgets('shows record todo and idea as top-level drawer destinations',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

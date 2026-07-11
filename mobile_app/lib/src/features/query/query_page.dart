@@ -184,39 +184,98 @@ class _IdeaTagPill extends StatelessWidget {
 }
 
 List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
-  final grouped = <String, List<EntryListItem>>{};
+  final today = _dateOnly(DateTime.now());
+  final grouped = <DateTime, List<EntryListItem>>{};
   for (final todo in todos) {
-    final day = _dayLabel(todo.startAt!);
+    final day = _dateOnly(todo.startAt!.toLocal());
     grouped.putIfAbsent(day, () => []).add(todo);
   }
+  grouped.putIfAbsent(today, () => const []);
+
+  final days = grouped.keys.toList()
+    ..sort((a, b) {
+      final rankA = _dayRank(a, today);
+      final rankB = _dayRank(b, today);
+      if (rankA != rankB) {
+        return rankA.compareTo(rankB);
+      }
+      if (rankA == 2) {
+        return b.compareTo(a);
+      }
+      return a.compareTo(b);
+    });
 
   return [
-    for (final entry in grouped.entries) ...[
+    for (final day in days) ...[
       Padding(
+        key: Key('todo-day-${_relativeDayKey(day, today)}-header'),
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text(
-          entry.key,
+          _dayLabel(day),
           style: Theme.of(context)
               .textTheme
               .titleMedium
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
-      for (final todo in entry.value)
+      if (grouped[day]!.isEmpty)
         Card(
-          child: ListTile(
-            leading: const Icon(Icons.event_available),
-            title: Text(todo.title),
-            subtitle: Text([
-              if (todo.startAt != null && todo.endAt != null)
-                '${_timeLabel(todo.startAt!)}-${_timeLabel(todo.endAt!)}',
-              if ((todo.location ?? '').isNotEmpty) todo.location!,
-              if ((todo.topic ?? '').isNotEmpty) todo.topic!,
-            ].join('  ')),
+          color: const Color(0xfff8fafc),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            child: Text(
+              '今天还没有待办。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xff6b7280),
+                  ),
+            ),
           ),
-        ),
+        )
+      else
+        for (final todo in grouped[day]!)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.event_available),
+              title: Text(todo.title),
+              subtitle: Text([
+                if (todo.startAt != null && todo.endAt != null)
+                  '${_timeLabel(todo.startAt!)}-${_timeLabel(todo.endAt!)}',
+                if ((todo.location ?? '').isNotEmpty) todo.location!,
+                if ((todo.topic ?? '').isNotEmpty) todo.topic!,
+              ].join('  ')),
+            ),
+          ),
     ],
   ];
+}
+
+DateTime _dateOnly(DateTime date) {
+  final local = date.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
+
+int _dayRank(DateTime day, DateTime today) {
+  if (day == today) {
+    return 0;
+  }
+  if (day.isAfter(today)) {
+    return 1;
+  }
+  return 2;
+}
+
+String _relativeDayKey(DateTime day, DateTime today) {
+  if (day == today) {
+    return 'today';
+  }
+  if (day == today.subtract(const Duration(days: 1))) {
+    return 'yesterday';
+  }
+  if (day == today.add(const Duration(days: 1))) {
+    return 'tomorrow';
+  }
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${day.year}-${two(day.month)}-${two(day.day)}';
 }
 
 String _dayLabel(DateTime date) {
