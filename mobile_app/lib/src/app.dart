@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'features/query/query_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/voice/voice_page.dart';
+import 'theme/app_colors.dart';
 
 class IdeaCaptureApp extends StatelessWidget {
   const IdeaCaptureApp({super.key});
@@ -17,10 +18,28 @@ class IdeaCaptureApp extends StatelessWidget {
       title: '语音想法记录',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2f6df6),
+          seedColor: AppColors.primary,
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xfffbfcff),
+        scaffoldBackgroundColor: AppColors.background,
+        cardColor: AppColors.surface,
+        dividerColor: AppColors.border,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primary),
+          ),
+        ),
         useMaterial3: true,
       ),
       routerConfig: _router,
@@ -36,7 +55,9 @@ final _router = GoRouter(
       routes: [
         GoRoute(
           path: '/voice',
-          builder: (context, state) => const VoicePage(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: VoicePage(),
+          ),
         ),
         GoRoute(
           path: '/query',
@@ -44,15 +65,21 @@ final _router = GoRouter(
         ),
         GoRoute(
           path: '/todos',
-          builder: (context, state) => const TodoQueryPage(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: TodoQueryPage(),
+          ),
         ),
         GoRoute(
           path: '/ideas',
-          builder: (context, state) => const IdeaQueryPage(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: IdeaQueryPage(),
+          ),
         ),
         GoRoute(
           path: '/settings',
-          builder: (context, state) => const SettingsPage(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: SettingsPage(),
+          ),
         ),
       ],
     ),
@@ -68,8 +95,13 @@ class _AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     return Scaffold(
+      backgroundColor: AppColors.background,
       drawer: _AppDrawer(currentLocation: location),
-      body: SafeArea(child: child),
+      body: ColoredBox(
+        key: const Key('app-background-fill'),
+        color: AppColors.background,
+        child: SafeArea(child: child),
+      ),
     );
   }
 }
@@ -85,7 +117,7 @@ class _AppDrawer extends StatelessWidget {
     return Drawer(
       key: const Key('app-side-drawer'),
       width: math.min(width * 0.82, 360),
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
       ),
@@ -101,7 +133,7 @@ class _AppDrawer extends StatelessWidget {
                   hintText: '搜索记录',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
-                  fillColor: const Color(0xfff3f6fb),
+                  fillColor: AppColors.surfaceSoft,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
@@ -112,15 +144,15 @@ class _AppDrawer extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff7f9fc),
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Row(
                   children: [
                     CircleAvatar(
                       radius: 21,
-                      backgroundColor: Color(0xffdbeafe),
-                      child: Icon(Icons.mic, color: Color(0xff2f6df6)),
+                      backgroundColor: AppColors.primarySoft,
+                      child: Icon(Icons.mic, color: AppColors.primary),
                     ),
                     SizedBox(width: 12),
                     Expanded(
@@ -132,7 +164,7 @@ class _AppDrawer extends StatelessWidget {
                                   fontSize: 19, fontWeight: FontWeight.w800)),
                           SizedBox(height: 2),
                           Text('本地 AI 想法记录',
-                              style: TextStyle(color: Color(0xff6b7280))),
+                              style: TextStyle(color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
@@ -168,7 +200,8 @@ class _AppDrawer extends StatelessWidget {
               const Divider(height: 24),
               Row(
                 children: [
-                  const Icon(Icons.storage_outlined, color: Color(0xff64748b)),
+                  const Icon(Icons.storage_outlined,
+                      color: AppColors.textSecondary),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Column(
@@ -178,7 +211,7 @@ class _AppDrawer extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.w700)),
                         Text('只保存在手机上',
                             style: TextStyle(
-                                color: Color(0xff6b7280), fontSize: 12)),
+                                color: AppColors.textSecondary, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -222,7 +255,7 @@ class _DrawerDestinationTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Material(
-        color: selected ? const Color(0xffeaf2ff) : Colors.transparent,
+        color: selected ? AppColors.primarySoft : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           key: Key('drawer-destination-$id'),
@@ -238,9 +271,7 @@ class _DrawerDestinationTile extends StatelessWidget {
               children: [
                 Icon(
                   selected ? selectedIcon : icon,
-                  color: selected
-                      ? const Color(0xff2f6df6)
-                      : const Color(0xff111827),
+                  color: selected ? AppColors.primary : AppColors.textPrimary,
                 ),
                 const SizedBox(width: 14),
                 Text(
@@ -249,8 +280,8 @@ class _DrawerDestinationTile extends StatelessWidget {
                     fontSize: 17,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     color: selected
-                        ? const Color(0xff1d4ed8)
-                        : const Color(0xff111827),
+                        ? AppColors.primaryDark
+                        : AppColors.textPrimary,
                   ),
                 ),
               ],

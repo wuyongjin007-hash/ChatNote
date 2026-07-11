@@ -8,6 +8,7 @@ import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/features/voice/voice_page.dart';
 import 'package:local_idea_capture/src/providers.dart';
 import 'package:local_idea_capture/src/speech/volcengine_speech_service.dart';
+import 'package:local_idea_capture/src/theme/app_colors.dart';
 
 void main() {
   testWidgets('uses one input bar to switch between text and voice modes',
@@ -64,6 +65,11 @@ void main() {
 
     expect(find.byKey(const Key('voice-input-strip')), findsOneWidget);
     expect(find.byKey(const Key('voice-side-signal-icon')), findsOneWidget);
+
+    final strip =
+        tester.widget<Container>(find.byKey(const Key('voice-input-strip')));
+    final decoration = strip.decoration as BoxDecoration;
+    expect(decoration.color, AppColors.surfaceSoft);
   });
 
   testWidgets('streams assistant text and shows a draft card after completion',

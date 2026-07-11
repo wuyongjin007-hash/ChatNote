@@ -8,6 +8,7 @@ import '../../domain/capture_conversation_agent.dart';
 import '../../domain/capture_models.dart';
 import '../../domain/conflict_detector.dart';
 import '../../providers.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/page_header.dart';
 
 class VoicePage extends ConsumerStatefulWidget {
@@ -418,6 +419,11 @@ class _TodoDeleteCard extends StatelessWidget {
     return Card(
       key: const Key('todo-delete-confirmation-card'),
       margin: const EdgeInsets.symmetric(vertical: 12),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: AppColors.border),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -486,6 +492,11 @@ class _DraftCard extends StatelessWidget {
     final isBatchTodo = isTodo && todoPayloads.length > 1;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 12),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: AppColors.border),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -534,7 +545,7 @@ class _DraftCard extends StatelessWidget {
               const SizedBox(height: 12),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
+                  color: AppColors.warningSoft,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Padding(
@@ -545,7 +556,7 @@ class _DraftCard extends StatelessWidget {
                       const Text('时间冲突',
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: Colors.deepOrange)),
+                              color: AppColors.warning)),
                       for (final conflict in conflicts)
                         Text('${conflict.title}  ${_timeRange(conflict)}'),
                       const SizedBox(height: 8),
@@ -605,19 +616,13 @@ class _ChatBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             constraints: const BoxConstraints(maxWidth: 310),
             decoration: BoxDecoration(
-              color: message.isUser ? const Color(0xff0b8cff) : Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(message.isUser ? 18 : 6),
-                bottomRight: Radius.circular(message.isUser ? 6 : 18),
-              ),
-              border: message.isUser
-                  ? null
-                  : Border.all(color: const Color(0xffe2e8f0)),
+              color: message.isUser ? AppColors.primary : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border:
+                  message.isUser ? null : Border.all(color: AppColors.border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withValues(alpha: 0.035),
                   blurRadius: 14,
                   offset: const Offset(0, 7),
                 ),
@@ -714,9 +719,9 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
       height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffe5e7eb)),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
             color: colorScheme.primary.withValues(alpha: 0.08),
@@ -776,7 +781,7 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
                         height: 44,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xfff7f8fb),
+                          color: AppColors.surface,
                           borderRadius: BorderRadius.circular(11),
                         ),
                         child: const Row(
@@ -1018,16 +1023,15 @@ class _TypingDotsBubbleState extends State<_TypingDotsBubble>
 
   @override
   Widget build(BuildContext context) {
-    final background = widget.isUser ? const Color(0xff0b8cff) : Colors.white;
-    final dotColor = widget.isUser ? Colors.white : const Color(0xff9ca3af);
+    final background = widget.isUser ? AppColors.primary : AppColors.surface;
+    final dotColor = widget.isUser ? Colors.white : AppColors.textMuted;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(18),
-        border:
-            widget.isUser ? null : Border.all(color: const Color(0xffe5e7eb)),
+        border: widget.isUser ? null : Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),

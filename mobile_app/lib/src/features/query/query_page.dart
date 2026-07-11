@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/page_header.dart';
 
 class TodoQueryPage extends ConsumerWidget {
@@ -54,7 +55,20 @@ class _IdeaQueryPageState extends ConsumerState<IdeaQueryPage> {
             decoration: InputDecoration(
               hintText: '搜索想法...',
               prefixIcon: const Icon(Icons.search),
-              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: AppColors.surfaceSoft,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: () => setState(() {}),
@@ -115,25 +129,80 @@ class _IdeaList extends ConsumerWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final idea = ideas[index];
-            return Card(
-              child: ListTile(
-                leading: const Icon(Icons.lightbulb_outline),
-                title: Text(idea.title),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            return Container(
+              key: const Key('idea-card'),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.035),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: IntrinsicHeight(
+                child: Row(
                   children: [
-                    Text(idea.summary ?? idea.normalizedText),
-                    if (idea.tags.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (final tag in idea.tags) _IdeaTagPill(tag: tag),
+                            Text(
+                              idea.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.2,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              idea.summary ?? idea.normalizedText,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    height: 1.35,
+                                  ),
+                            ),
+                            if (idea.tags.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 9),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final tag in idea.tags)
+                                      _IdeaTagPill(tag: tag),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),
+                    ),
+                    Container(
+                      width: 4,
+                      decoration: const BoxDecoration(
+                        color: AppColors.accentLine,
+                        borderRadius: BorderRadius.horizontal(
+                          right: Radius.circular(8),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -151,12 +220,12 @@ class _IdeaTagPill extends StatelessWidget {
   final String tag;
 
   static const _palette = [
-    (background: Color(0xfffff1f2), foreground: Color(0xffbe123c)),
-    (background: Color(0xffeff6ff), foreground: Color(0xff1d4ed8)),
-    (background: Color(0xffecfdf5), foreground: Color(0xff047857)),
-    (background: Color(0xfffff7ed), foreground: Color(0xffc2410c)),
-    (background: Color(0xfff5f3ff), foreground: Color(0xff6d28d9)),
-    (background: Color(0xfff0fdfa), foreground: Color(0xff0f766e)),
+    (background: Color(0xffeaf2ff), foreground: Color(0xff2865c7)),
+    (background: Color(0xffe8f5ef), foreground: Color(0xff16805f)),
+    (background: Color(0xfffff1de), foreground: Color(0xffb8611f)),
+    (background: Color(0xfffcebec), foreground: Color(0xffb9424b)),
+    (background: Color(0xfff1ecfa), foreground: Color(0xff7250a6)),
+    (background: Color(0xffe7f5f3), foreground: Color(0xff287e76)),
   ];
 
   @override
@@ -220,13 +289,13 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
       ),
       if (grouped[day]!.isEmpty)
         Card(
-          color: const Color(0xfff8fafc),
+          color: AppColors.surface,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             child: Text(
               '今天还没有待办。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xff6b7280),
+                    color: AppColors.textSecondary,
                   ),
             ),
           ),
@@ -249,11 +318,12 @@ class _TodoCard extends StatelessWidget {
       key: const Key('todo-card'),
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: const Color(0xfff7f8fa),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.035),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -268,10 +338,10 @@ class _TodoCard extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: const Color(0xfff8fafc),
+                color: AppColors.surfaceSoft,
                 borderRadius: BorderRadius.circular(5),
                 border: Border.all(
-                  color: const Color(0xffa3a3a3),
+                  color: AppColors.textMuted,
                   width: 1.5,
                 ),
               ),
@@ -289,8 +359,8 @@ class _TodoCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: const Color(0xff1f2937),
-                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w400,
                             height: 1.2,
                           ),
                     ),
@@ -300,7 +370,7 @@ class _TodoCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xff10b981),
+                            color: AppColors.success,
                             fontWeight: FontWeight.w600,
                             height: 1.1,
                           ),
@@ -313,7 +383,7 @@ class _TodoCard extends StatelessWidget {
               key: const Key('todo-card-accent'),
               width: 5,
               decoration: const BoxDecoration(
-                color: Color(0xff93c5fd),
+                color: AppColors.accentLine,
                 borderRadius: BorderRadius.horizontal(
                   right: Radius.circular(8),
                 ),

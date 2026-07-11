@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:local_idea_capture/src/app.dart';
 import 'package:local_idea_capture/src/data/app_database.dart';
 import 'package:local_idea_capture/src/providers.dart';
+import 'package:local_idea_capture/src/theme/app_colors.dart';
 
 void main() {
   testWidgets('shows record todo and idea as top-level drawer destinations',
@@ -59,5 +60,31 @@ void main() {
 
     expect(find.byKey(const Key('drawer-destination-ideas-selected')),
         findsOneWidget);
+  });
+
+  testWidgets('keeps warm background at the app shell level', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+        ],
+        child: const IdeaCaptureApp(),
+      ),
+    );
+    await tester.pump();
+
+    final shellScaffold = tester.widget<Scaffold>(
+      find
+          .descendant(
+            of: find.byType(IdeaCaptureApp),
+            matching: find.byType(Scaffold),
+          )
+          .first,
+    );
+    expect(shellScaffold.backgroundColor, AppColors.background);
+    expect(find.byKey(const Key('app-background-fill')), findsOneWidget);
   });
 }
