@@ -47,12 +47,12 @@ class _IdeaQueryPageState extends ConsumerState<IdeaQueryPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PageHeader(title: '创意'),
+          const PageHeader(title: '想法'),
           const SizedBox(height: 12),
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: '搜索创意...',
+              hintText: '搜索想法...',
               prefixIcon: const Icon(Icons.search),
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
@@ -108,7 +108,7 @@ class _IdeaList extends ConsumerWidget {
         }
         final ideas = snapshot.data!;
         if (ideas.isEmpty) {
-          return const Center(child: Text('还没有创意。'));
+          return const Center(child: Text('还没有想法。'));
         }
         return ListView.separated(
           itemCount: ideas.length,
@@ -232,21 +232,98 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
           ),
         )
       else
-        for (final todo in grouped[day]!)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.event_available),
-              title: Text(todo.title),
-              subtitle: Text([
-                if (todo.startAt != null && todo.endAt != null)
-                  '${_timeLabel(todo.startAt!)}-${_timeLabel(todo.endAt!)}',
-                if ((todo.location ?? '').isNotEmpty) todo.location!,
-                if ((todo.topic ?? '').isNotEmpty) todo.topic!,
-              ].join('  ')),
-            ),
-          ),
+        for (final todo in grouped[day]!) _TodoCard(todo: todo),
     ],
   ];
+}
+
+class _TodoCard extends StatelessWidget {
+  const _TodoCard({required this.todo});
+
+  final EntryListItem todo;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = _todoDetail(todo);
+    return Container(
+      key: const Key('todo-card'),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xfff7f8fa),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            const SizedBox(width: 18),
+            Container(
+              key: const Key('todo-check-box'),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: const Color(0xfff8fafc),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                  color: const Color(0xffa3a3a3),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      todo.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: const Color(0xff1f2937),
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: const Color(0xff10b981),
+                            fontWeight: FontWeight.w600,
+                            height: 1.1,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              key: const Key('todo-card-accent'),
+              width: 5,
+              decoration: const BoxDecoration(
+                color: Color(0xff93c5fd),
+                borderRadius: BorderRadius.horizontal(
+                  right: Radius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 DateTime _dateOnly(DateTime date) {
@@ -285,8 +362,16 @@ String _dayLabel(DateTime date) {
   return '${date.month}月${date.day}日 ${weekdays[date.weekday - 1]}';
 }
 
-String _timeLabel(DateTime date) {
+String _dateTimeLabel(DateTime date) {
   final local = date.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
-  return '${two(local.hour)}:${two(local.minute)}';
+  return '${local.year}-${local.month}-${local.day} ${two(local.hour)}:${two(local.minute)}';
+}
+
+String _todoDetail(EntryListItem todo) {
+  final parts = <String>[
+    if (todo.startAt != null) _dateTimeLabel(todo.startAt!),
+    if ((todo.location ?? '').isNotEmpty) todo.location!,
+  ];
+  return parts.join('  ');
 }

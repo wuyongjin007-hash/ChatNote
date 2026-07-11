@@ -56,6 +56,32 @@ void main() {
     expect(results.single.tags, containsAll(['history', 'reading']));
   });
 
+  test('finds Chinese ideas with multi-term fuzzy text search', () async {
+    await database.saveIdea(
+      capture: const CaptureResult(
+        intentType: CaptureIntentType.idea,
+        confidence: 0.95,
+        title: '万历十五年和中国通史观点差异',
+        summary: '查询万历十五年和中国通史的历史观点差异',
+        missingFields: [],
+        followUpQuestion: null,
+        shouldSave: true,
+        todoPayload: null,
+        ideaPayload: IdeaPayload(
+          summary: '查询万历十五年和中国通史的历史观点差异',
+          sourceHint: null,
+          tags: ['历史'],
+        ),
+      ),
+      rawText: '万历十五年这本书和中国通史里的历史观点有出入',
+    );
+
+    final results = await database.searchIdeas('万历 通史');
+
+    expect(results, hasLength(1));
+    expect(results.single.title, '万历十五年和中国通史观点差异');
+  });
+
   test('matches todo deletion by date, overlapping time, and keyword',
       () async {
     await database.saveTodo(

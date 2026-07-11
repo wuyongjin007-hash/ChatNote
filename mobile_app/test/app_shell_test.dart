@@ -31,7 +31,7 @@ void main() {
     expect(find.byKey(const Key('app-side-drawer')), findsOneWidget);
     expect(find.text('记录'), findsOneWidget);
     expect(find.text('待办'), findsOneWidget);
-    expect(find.text('创意'), findsOneWidget);
+    expect(find.text('想法'), findsOneWidget);
     expect(find.text('查询'), findsNothing);
     expect(find.byKey(const Key('drawer-destination-settings')), findsNothing);
     expect(find.byKey(const Key('drawer-destination-voice-selected')),
@@ -52,7 +52,7 @@ void main() {
     await tester.tap(find.byKey(const Key('drawer-destination-ideas')));
     await tester.pumpAndSettle();
 
-    expect(find.text('创意'), findsOneWidget);
+    expect(find.text('想法'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('app-drawer-menu-button')));
     await tester.pumpAndSettle();

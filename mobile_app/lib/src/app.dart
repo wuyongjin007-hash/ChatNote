@@ -160,7 +160,7 @@ class _AppDrawer extends StatelessWidget {
                 id: 'ideas',
                 icon: Icons.lightbulb_outline,
                 selectedIcon: Icons.lightbulb,
-                label: '创意',
+                label: '想法',
                 path: '/ideas',
                 selected: currentLocation == '/ideas',
               ),

@@ -42,7 +42,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('08:00-09:00'), findsOneWidget);
+    expect(find.textContaining('08:00'), findsOneWidget);
     expect(find.textContaining('00:00-01:00'), findsNothing);
   });
 
@@ -86,12 +86,45 @@ void main() {
 
     expect(todayTop, lessThan(yesterdayTop));
   });
+
+  testWidgets('renders todos as compact checklist cards', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await database.saveTodo(
+      capture: _todoCapture(
+        title: '去办公室做PPT',
+        startAt: DateTime(2026, 7, 11, 14),
+        endAt: DateTime(2026, 7, 11, 14, 30),
+        location: '办公室',
+        topic: '做PPT',
+      ),
+      rawText: '7月11日下午2点去办公室做PPT',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: TodoQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('todo-card')), findsOneWidget);
+    expect(find.byKey(const Key('todo-check-box')), findsOneWidget);
+    expect(find.byKey(const Key('todo-card-accent')), findsOneWidget);
+    expect(find.byIcon(Icons.event_available), findsNothing);
+    expect(find.textContaining('2026-7-11 14:00'), findsOneWidget);
+    expect(find.textContaining('14:00-14:30  办公室  做PPT'), findsNothing);
+  });
 }
 
 CaptureResult _todoCapture({
   required String title,
   required DateTime startAt,
   required DateTime endAt,
+  String? location,
+  String? topic,
 }) {
   return CaptureResult(
     intentType: CaptureIntentType.todo,
@@ -104,8 +137,8 @@ CaptureResult _todoCapture({
     todoPayload: TodoPayload(
       startAt: startAt,
       endAt: endAt,
-      location: null,
-      topic: title,
+      location: location,
+      topic: topic ?? title,
       reminderAt: null,
       status: 'draft',
     ),

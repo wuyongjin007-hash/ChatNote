@@ -353,42 +353,32 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   }
 
   Future<List<QueryRow>> _searchIdeasByText(String trimmed) async {
-    final isFts = await db.entryFtsUsesFts5();
-    if (!isFts) {
-      final likeQuery =
-          '%${trimmed.replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
-      return db.customSelect(
-        '''
-        SELECT e.*, i.summary, i.source_hint
-        FROM entry_fts f
-        JOIN entries e ON e.id = f.entry_id
-        JOIN ideas i ON i.entry_id = e.id
-        WHERE f.title LIKE ? ESCAPE '\\'
-           OR f.normalized_text LIKE ? ESCAPE '\\'
-           OR f.raw_text LIKE ? ESCAPE '\\'
-        ORDER BY e.updated_at DESC
-        ''',
-        variables: [
-          Variable.withString(likeQuery),
-          Variable.withString(likeQuery),
-          Variable.withString(likeQuery),
-        ],
-        readsFrom: {entries, ideas},
-      ).get();
-    }
-
-    return db.customSelect(
-      '''
+    final terms = _fuzzyTerms(trimmed);
+    final whereClause = terms
+        .map((_) =>
+            "(f.title LIKE ? ESCAPE '\\' OR f.normalized_text LIKE ? ESCAPE '\\' OR f.raw_text LIKE ? ESCAPE '\\')")
+        .join(' AND ');
+    final variables = [
+      for (final term in terms) ...[
+        Variable.withString(term),
+        Variable.withString(term),
+        Variable.withString(term),
+      ],
+    ];
+    return db
+        .customSelect(
+          '''
       SELECT e.*, i.summary, i.source_hint
       FROM entry_fts f
       JOIN entries e ON e.id = f.entry_id
       JOIN ideas i ON i.entry_id = e.id
-      WHERE entry_fts MATCH ?
+      WHERE $whereClause
       ORDER BY e.updated_at DESC
       ''',
-      variables: [Variable.withString(_ftsQuery(trimmed))],
-      readsFrom: {entries, ideas},
-    ).get();
+          variables: variables,
+          readsFrom: {entries, ideas},
+        )
+        .get();
   }
 
   EntryListItem _todoFromRow(QueryRow row) {
@@ -427,10 +417,11 @@ DateTime? _readDate(QueryRow row, String column) {
   return value == null ? null : DateTime.tryParse(value);
 }
 
-String _ftsQuery(String value) {
+List<String> _fuzzyTerms(String value) {
   return value
-      .replaceAll('"', ' ')
       .split(RegExp(r'\s+'))
       .where((part) => part.isNotEmpty)
-      .join(' ');
+      .map((part) =>
+          '%${part.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_')}%')
+      .toList(growable: false);
 }

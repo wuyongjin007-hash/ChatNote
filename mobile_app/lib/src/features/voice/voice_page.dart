@@ -192,8 +192,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _aiBusy = false;
       _voiceStage = _VoiceStage.idle;
       _messages.add(_ChatMessage.assistant(savedIds.length > 1
-          ? 'Saved ${savedIds.length} todos locally.'
-          : 'Saved locally.'));
+          ? '已保存 ${savedIds.length} 条待办到手机本地。'
+          : '已保存到手机本地。'));
     });
     _scrollToBottom();
   }
