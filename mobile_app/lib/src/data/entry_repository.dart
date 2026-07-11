@@ -49,6 +49,10 @@ class EntryRepository {
     return _database.deleteTodos(ids);
   }
 
+  Future<void> updateTodoStatus(String id, String status) {
+    return _database.updateTodoStatus(id, status);
+  }
+
   Future<List<EntryListItem>> loadUpcomingTodos() {
     final now = DateTime.now();
     return _database.loadTodos(

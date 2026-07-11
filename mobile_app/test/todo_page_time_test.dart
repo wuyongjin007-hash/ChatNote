@@ -6,6 +6,7 @@ import 'package:local_idea_capture/src/data/app_database.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/features/query/query_page.dart';
 import 'package:local_idea_capture/src/providers.dart';
+import 'package:local_idea_capture/src/theme/app_colors.dart';
 
 void main() {
   testWidgets('shows UTC stored todo times in local time', (tester) async {
@@ -114,8 +115,58 @@ void main() {
     expect(find.byKey(const Key('todo-check-box')), findsOneWidget);
     expect(find.byKey(const Key('todo-card-accent')), findsOneWidget);
     expect(find.byIcon(Icons.event_available), findsNothing);
-    expect(find.textContaining('2026-7-11 14:00'), findsOneWidget);
+    expect(find.textContaining('14:00  办公室'), findsOneWidget);
+    expect(find.textContaining('2026-7-11'), findsNothing);
     expect(find.textContaining('14:00-14:30  办公室  做PPT'), findsNothing);
+  });
+  testWidgets('toggles a todo completed style and persists its status',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final now = DateTime.now();
+    final startAt = DateTime(now.year, now.month, now.day, 16);
+
+    await database.saveTodo(
+      capture: _todoCapture(
+        title: 'Finish presentation',
+        startAt: startAt,
+        endAt: startAt.add(const Duration(minutes: 30)),
+      ),
+      rawText: 'finish presentation',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: TodoQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-check-box')));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    final completedTitle = tester.widget<Text>(find.text('Finish presentation'));
+    expect(completedTitle.style?.decoration, TextDecoration.lineThrough);
+    expect(completedTitle.style?.color, AppColors.textMuted);
+    final saved = await database.loadTodos(
+      DateTime(now.year, now.month, now.day),
+      DateTime(now.year, now.month, now.day + 1),
+    );
+    expect(saved.single.status, 'completed');
+
+    await tester.tap(find.byKey(const Key('todo-check-box')));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check), findsNothing);
+    final restoredTitle = tester.widget<Text>(find.text('Finish presentation'));
+    expect(restoredTitle.style?.decoration, TextDecoration.none);
+    final restored = await database.loadTodos(
+      DateTime(now.year, now.month, now.day),
+      DateTime(now.year, now.month, now.day + 1),
+    );
+    expect(restored.single.status, 'pending');
   });
 }
 

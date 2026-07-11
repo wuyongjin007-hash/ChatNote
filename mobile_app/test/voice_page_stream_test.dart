@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_idea_capture/src/audio/interaction_sound_service.dart';
 import 'package:local_idea_capture/src/data/app_database.dart';
 import 'package:local_idea_capture/src/domain/capture_conversation_agent.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
@@ -27,21 +28,22 @@ void main() {
       ),
     );
 
-    expect(find.text('发送消息或按住说话...'), findsOneWidget);
+    expect(find.text('按住说话'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byIcon(Icons.keyboard_alt_outlined), findsOneWidget);
     expect(find.text('先用文字模拟语音输入...'), findsNothing);
     expect(find.byIcon(Icons.add), findsNothing);
 
     await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('按住说话'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
-    expect(find.byIcon(Icons.keyboard_alt_outlined), findsOneWidget);
+    expect(find.text('发送消息或按住说话...'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('发送消息或按住说话...'), findsOneWidget);
+    expect(find.text('按住说话'), findsOneWidget);
   });
 
   testWidgets('renders voice input as a compact rectangular strip',
@@ -59,9 +61,6 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: VoicePage())),
       ),
     );
-
-    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
-    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('voice-input-strip')), findsOneWidget);
     expect(find.byKey(const Key('voice-side-signal-icon')), findsOneWidget);
@@ -88,6 +87,8 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'manual meeting');
     await tester.pump();
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -123,9 +124,6 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
-    await tester.pumpAndSettle();
-
     final center =
         tester.getCenter(find.byKey(const Key('voice-press-button')));
     final gesture = await tester.startGesture(center);
@@ -144,6 +142,37 @@ void main() {
     expect(find.byKey(const Key('voice-recognizing-bubble')), findsNothing);
     expect(find.text('voice meeting'), findsOneWidget);
     expect(find.textContaining('AI todo'), findsOneWidget);
+  });
+
+  testWidgets('plays xiu after successful voice transcription', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    final sounds = _FakeInteractionSoundService();
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          interactionSoundServiceProvider.overrideWithValue(sounds),
+          speechChannelProvider.overrideWithValue(
+            _FakeSpeechService('voice meeting', delay: Duration.zero),
+          ),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('voice-press-button'))),
+    );
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(sounds.xiuCount, 1);
+    expect(sounds.dingCount, 0);
   });
 
   testWidgets('starts voice recording on pointer down without long-press delay',
@@ -165,9 +194,6 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: VoicePage())),
       ),
     );
-
-    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
-    await tester.pumpAndSettle();
 
     final center =
         tester.getCenter(find.byKey(const Key('voice-press-button')));
@@ -199,6 +225,8 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'overlapping todo');
     await tester.pump();
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -237,6 +265,8 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '删除明天开会的提醒');
     await tester.pump();
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -273,6 +303,8 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'add two todos');
     await tester.pump();
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -293,6 +325,55 @@ void main() {
     expect(find.text('已保存 2 条待办到手机本地。'), findsOneWidget);
     expect(find.text('Saved 2 todos locally.'), findsNothing);
   });
+
+  testWidgets('plays ding after a draft is saved successfully', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    final sounds = _FakeInteractionSoundService();
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          interactionSoundServiceProvider.overrideWithValue(sounds),
+          captureConversationAgentProvider.overrideWithValue(
+            _FakeCaptureConversationAgent(capture: _batchTodoDraft()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'add two todos');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FilledButton).last);
+    await tester.pumpAndSettle();
+
+    expect(sounds.dingCount, 1);
+    expect(sounds.xiuCount, 0);
+  });
+}
+
+class _FakeInteractionSoundService implements InteractionSoundService {
+  int dingCount = 0;
+  int xiuCount = 0;
+
+  @override
+  Future<void> playDing() async {
+    dingCount++;
+  }
+
+  @override
+  Future<void> playXiu() async {
+    xiuCount++;
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _FakeCaptureConversationAgent implements CaptureConversationAgent {

@@ -79,6 +79,10 @@ class AppDatabase extends _$AppDatabase {
     return entryDao.deleteTodos(ids);
   }
 
+  Future<void> updateTodoStatus(String id, String status) {
+    return entryDao.updateTodoStatus(id, status);
+  }
+
   Future<void> deleteEntry(String id) {
     return entryDao.deleteEntry(id);
   }

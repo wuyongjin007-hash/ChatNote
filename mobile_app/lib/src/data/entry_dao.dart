@@ -22,6 +22,7 @@ class EntryListItem {
     this.topic,
     this.summary,
     this.tags = const [],
+    this.status = 'pending',
   });
 
   final String id;
@@ -37,6 +38,7 @@ class EntryListItem {
   final String? topic;
   final String? summary;
   final List<String> tags;
+  final String status;
 }
 
 @DriftAccessor(tables: [Entries, Todos, Ideas, Tags, EntryTags])
@@ -154,7 +156,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   Future<List<EntryListItem>> loadTodos(DateTime from, DateTime to) async {
     final rows = await db.customSelect(
       '''
-      SELECT e.*, t.start_at, t.end_at, t.location, t.topic
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status
       FROM entries e
       JOIN todos t ON t.entry_id = e.id
       WHERE t.start_at IS NOT NULL
@@ -218,7 +220,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       TodoDeletePayload payload) async {
     final rows = await db.customSelect(
       '''
-      SELECT e.*, t.start_at, t.end_at, t.location, t.topic
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status
       FROM entries e
       JOIN todos t ON t.entry_id = e.id
       WHERE t.start_at IS NOT NULL AND t.end_at IS NOT NULL
@@ -275,6 +277,17 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
             .customStatement('DELETE FROM entry_fts WHERE entry_id = ?', [id]);
         await (delete(entries)..where((table) => table.id.equals(id))).go();
       }
+    });
+  }
+
+  Future<void> updateTodoStatus(String id, String status) async {
+    await transaction(() async {
+      await (update(todos)..where((table) => table.entryId.equals(id))).write(
+        TodosCompanion(status: Value(status)),
+      );
+      await (update(entries)..where((table) => table.id.equals(id))).write(
+        EntriesCompanion(updatedAt: Value(DateTime.now().toIso8601String())),
+      );
     });
   }
 
@@ -394,6 +407,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       endAt: _readDate(row, 'end_at'),
       location: row.readNullable<String>('location'),
       topic: row.readNullable<String>('topic'),
+      status: row.read<String>('status'),
     );
   }
 

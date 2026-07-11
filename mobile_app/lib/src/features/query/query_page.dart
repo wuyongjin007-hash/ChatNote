@@ -86,13 +86,37 @@ class _IdeaQueryPageState extends ConsumerState<IdeaQueryPage> {
   String _query() => _searchController.text;
 }
 
-class _TodoList extends ConsumerWidget {
+class _TodoList extends ConsumerStatefulWidget {
   const _TodoList();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TodoList> createState() => _TodoListState();
+}
+
+class _TodoListState extends ConsumerState<_TodoList> {
+  late Future<List<EntryListItem>> _todos;
+
+  @override
+  void initState() {
+    super.initState();
+    _todos = ref.read(entryRepositoryProvider).loadUpcomingTodos();
+  }
+
+  Future<void> _toggleTodo(EntryListItem todo) async {
+    final nextStatus = todo.status == 'completed' ? 'pending' : 'completed';
+    await ref.read(entryRepositoryProvider).updateTodoStatus(todo.id, nextStatus);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _todos = ref.read(entryRepositoryProvider).loadUpcomingTodos();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<List<EntryListItem>>(
-      future: ref.watch(entryRepositoryProvider).loadUpcomingTodos(),
+      future: _todos,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -101,7 +125,9 @@ class _TodoList extends ConsumerWidget {
         if (todos.isEmpty) {
           return const Center(child: Text('还没有待办。'));
         }
-        return ListView(children: _groupTodosByDay(context, todos));
+        return ListView(
+          children: _groupTodosByDay(context, todos, _toggleTodo),
+        );
       },
     );
   }
@@ -252,7 +278,11 @@ class _IdeaTagPill extends StatelessWidget {
   }
 }
 
-List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
+List<Widget> _groupTodosByDay(
+  BuildContext context,
+  List<EntryListItem> todos,
+  ValueChanged<EntryListItem> onToggle,
+) {
   final today = _dateOnly(DateTime.now());
   final grouped = <DateTime, List<EntryListItem>>{};
   for (final todo in todos) {
@@ -301,19 +331,22 @@ List<Widget> _groupTodosByDay(BuildContext context, List<EntryListItem> todos) {
           ),
         )
       else
-        for (final todo in grouped[day]!) _TodoCard(todo: todo),
+        for (final todo in grouped[day]!)
+          _TodoCard(todo: todo, onToggle: () => onToggle(todo)),
     ],
   ];
 }
 
 class _TodoCard extends StatelessWidget {
-  const _TodoCard({required this.todo});
+  const _TodoCard({required this.todo, required this.onToggle});
 
   final EntryListItem todo;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final detail = _todoDetail(todo);
+    final isCompleted = todo.status == 'completed';
     return Container(
       key: const Key('todo-card'),
       margin: const EdgeInsets.only(bottom: 10),
@@ -333,17 +366,30 @@ class _TodoCard extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 18),
-            Container(
+            InkWell(
               key: const Key('todo-check-box'),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: AppColors.textMuted,
-                  width: 1.5,
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(5),
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isCompleted
+                      ? AppColors.surfaceSoft
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(
+                    color: AppColors.textMuted,
+                    width: 1.5,
+                  ),
                 ),
+                child: isCompleted
+                    ? const Icon(
+                        Icons.check,
+                        size: 17,
+                        color: AppColors.textMuted,
+                      )
+                    : null,
               ),
             ),
             const SizedBox(width: 16),
@@ -359,9 +405,15 @@ class _TodoCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AppColors.textPrimary,
+                            color: isCompleted
+                                ? AppColors.textMuted
+                                : AppColors.textPrimary,
                             fontWeight: FontWeight.w400,
                             height: 1.2,
+                            decoration: isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            decorationColor: AppColors.textMuted,
                           ),
                     ),
                     const SizedBox(height: 10),
@@ -370,7 +422,9 @@ class _TodoCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: AppColors.success,
+                            color: isCompleted
+                                ? AppColors.textMuted
+                                : AppColors.success,
                             fontWeight: FontWeight.w600,
                             height: 1.1,
                           ),
@@ -432,15 +486,15 @@ String _dayLabel(DateTime date) {
   return '${date.month}月${date.day}日 ${weekdays[date.weekday - 1]}';
 }
 
-String _dateTimeLabel(DateTime date) {
+String _timeLabel(DateTime date) {
   final local = date.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
-  return '${local.year}-${local.month}-${local.day} ${two(local.hour)}:${two(local.minute)}';
+  return '${two(local.hour)}:${two(local.minute)}';
 }
 
 String _todoDetail(EntryListItem todo) {
   final parts = <String>[
-    if (todo.startAt != null) _dateTimeLabel(todo.startAt!),
+    if (todo.startAt != null) _timeLabel(todo.startAt!),
     if ((todo.location ?? '').isNotEmpty) todo.location!,
   ];
   return parts.join('  ');

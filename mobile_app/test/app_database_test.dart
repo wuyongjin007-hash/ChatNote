@@ -170,6 +170,23 @@ void main() {
     expect(todos.map((todo) => todo.topic), ['report', 'buy fruit']);
     expect(todos.map((todo) => todo.rawText).toSet(), hasLength(1));
   });
+
+  test('updates and reloads a todo completion status', () async {
+    final id = await database.saveTodo(
+      capture: _todo(
+        'Complete report',
+        DateTime(2026, 7, 11, 15),
+        DateTime(2026, 7, 11, 15, 30),
+      ),
+      rawText: 'complete report at three',
+    );
+
+    await database.updateTodoStatus(id, 'completed');
+
+    final todos =
+        await database.loadTodos(DateTime(2026, 7, 11), DateTime(2026, 7, 12));
+    expect(todos.single.status, 'completed');
+  });
 }
 
 CaptureResult _todo(String title, DateTime start, DateTime end,

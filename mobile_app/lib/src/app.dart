@@ -7,6 +7,7 @@ import 'features/query/query_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/voice/voice_page.dart';
 import 'theme/app_colors.dart';
+import 'widgets/app_drawer_controller.dart';
 
 class IdeaCaptureApp extends StatelessWidget {
   const IdeaCaptureApp({super.key});
@@ -55,8 +56,9 @@ final _router = GoRouter(
       routes: [
         GoRoute(
           path: '/voice',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: VoicePage(),
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const VoicePage(),
           ),
         ),
         GoRoute(
@@ -65,20 +67,23 @@ final _router = GoRouter(
         ),
         GoRoute(
           path: '/todos',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: TodoQueryPage(),
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const TodoQueryPage(),
           ),
         ),
         GoRoute(
           path: '/ideas',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: IdeaQueryPage(),
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const IdeaQueryPage(),
           ),
         ),
         GoRoute(
           path: '/settings',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: SettingsPage(),
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const SettingsPage(),
           ),
         ),
       ],
@@ -86,85 +91,181 @@ final _router = GoRouter(
   ],
 );
 
-class _AppShell extends StatelessWidget {
+class _AppShell extends StatefulWidget {
   const _AppShell({required this.child});
 
   final Widget child;
 
   @override
+  State<_AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<_AppShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _drawerController;
+  bool _isNavigating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _drawerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 170),
+    );
+    AppDrawerController.attach(this, _openDrawer);
+  }
+
+  @override
+  void dispose() {
+    AppDrawerController.detach(this);
+    _drawerController.dispose();
+    super.dispose();
+  }
+
+  void _openDrawer() {
+    if (!_isNavigating) _drawerController.forward();
+  }
+
+  void _closeDrawer() {
+    if (!_isNavigating) _drawerController.reverse();
+  }
+
+  Future<void> _navigateFromDrawer(String path) async {
+    if (_isNavigating) return;
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath == path) {
+      _closeDrawer();
+      return;
+    }
+
+    _isNavigating = true;
+    await _drawerController.reverse();
+    if (!mounted) return;
+    context.go(path);
+    _isNavigating = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    AppDrawerController.attach(this, _openDrawer);
     final location = GoRouterState.of(context).uri.path;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final drawerWidth = math.min(screenWidth * 0.82, 360.0);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      drawer: _AppDrawer(currentLocation: location),
-      body: ColoredBox(
-        key: const Key('app-background-fill'),
-        color: AppColors.background,
-        child: SafeArea(child: child),
+      body: AnimatedBuilder(
+        animation: _drawerController,
+        builder: (context, _) {
+          final progress = Curves.easeOutCubic.transform(
+            _drawerController.value,
+          );
+          final contentOffset = drawerWidth * 0.86 * progress;
+
+          return Stack(
+            children: [
+              if (_drawerController.value > 0)
+                Transform.translate(
+                  offset: Offset(-drawerWidth * (1 - progress), 0),
+                  child: SizedBox(
+                    width: drawerWidth,
+                    child: _AppDrawer(
+                      currentLocation: location,
+                      onNavigate: _navigateFromDrawer,
+                    ),
+                  ),
+                ),
+              Transform.translate(
+                offset: Offset(contentOffset, 0),
+                child: Stack(
+                  key: const Key('app-pushed-content'),
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      key: const Key('app-background-fill'),
+                      color: AppColors.background,
+                      child: SafeArea(child: widget.child),
+                    ),
+                    if (_drawerController.value > 0)
+                      GestureDetector(
+                        onTap: _closeDrawer,
+                        child: Opacity(
+                          key: const Key('app-content-fade-overlay'),
+                          opacity: 0.46 * progress,
+                          child: const ColoredBox(
+                            color: AppColors.surface,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
 class _AppDrawer extends StatelessWidget {
-  const _AppDrawer({required this.currentLocation});
+  const _AppDrawer({
+    required this.currentLocation,
+    required this.onNavigate,
+  });
 
   final String currentLocation;
+  final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
     return Drawer(
       key: const Key('app-side-drawer'),
-      width: math.min(width * 0.82, 360),
+      width: double.infinity,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+          padding: const EdgeInsets.fromLTRB(18, 18, 58, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                enabled: false,
-                decoration: InputDecoration(
-                  hintText: '搜索记录',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: AppColors.surfaceSoft,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Row(
                   children: [
                     CircleAvatar(
-                      radius: 21,
+                      radius: 18,
                       backgroundColor: AppColors.primarySoft,
-                      child: Icon(Icons.mic, color: AppColors.primary),
+                      child: Icon(
+                        Icons.mic_none_rounded,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
                     ),
-                    SizedBox(width: 12),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('语音记录',
                               style: TextStyle(
-                                  fontSize: 19, fontWeight: FontWeight.w800)),
-                          SizedBox(height: 2),
+                                  fontSize: 17, fontWeight: FontWeight.w700)),
+                          SizedBox(height: 1),
                           Text('本地 AI 想法记录',
-                              style: TextStyle(color: AppColors.textSecondary)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12)),
                         ],
                       ),
                     ),
@@ -179,6 +280,7 @@ class _AppDrawer extends StatelessWidget {
                 label: '记录',
                 path: '/voice',
                 selected: currentLocation == '/voice',
+                onNavigate: onNavigate,
               ),
               _DrawerDestinationTile(
                 id: 'todos',
@@ -187,6 +289,7 @@ class _AppDrawer extends StatelessWidget {
                 label: '待办',
                 path: '/todos',
                 selected: currentLocation == '/todos',
+                onNavigate: onNavigate,
               ),
               _DrawerDestinationTile(
                 id: 'ideas',
@@ -195,6 +298,7 @@ class _AppDrawer extends StatelessWidget {
                 label: '想法',
                 path: '/ideas',
                 selected: currentLocation == '/ideas',
+                onNavigate: onNavigate,
               ),
               const Spacer(),
               const Divider(height: 24),
@@ -218,10 +322,7 @@ class _AppDrawer extends StatelessWidget {
                   IconButton(
                     tooltip: '设置',
                     icon: const Icon(Icons.tune),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      context.go('/settings');
-                    },
+                    onPressed: () => onNavigate('/settings'),
                   ),
                 ],
               ),
@@ -241,6 +342,7 @@ class _DrawerDestinationTile extends StatelessWidget {
     required this.label,
     required this.path,
     required this.selected,
+    required this.onNavigate,
   });
 
   final String id;
@@ -249,6 +351,7 @@ class _DrawerDestinationTile extends StatelessWidget {
   final String label;
   final String path;
   final bool selected;
+  final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -260,10 +363,7 @@ class _DrawerDestinationTile extends StatelessWidget {
         child: InkWell(
           key: Key('drawer-destination-$id'),
           borderRadius: BorderRadius.circular(14),
-          onTap: () {
-            Navigator.of(context).pop();
-            context.go(path);
-          },
+          onTap: () => onNavigate(path),
           child: Container(
             key: selected ? Key('drawer-destination-$id-selected') : null,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),

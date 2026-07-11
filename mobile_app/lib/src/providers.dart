@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'ai/volcengine_ark_capture_client.dart';
+import 'audio/interaction_sound_service.dart';
 import 'data/app_database.dart';
 import 'data/entry_repository.dart';
 import 'domain/capture_conversation_agent.dart';
@@ -75,4 +76,11 @@ final volcengineArkFilesClientProvider =
 
 final speechChannelProvider = Provider<VolcengineSpeechService>((ref) {
   return VolcengineSpeechService(ref.watch(volcengineArkFilesClientProvider));
+});
+
+final interactionSoundServiceProvider =
+    Provider<InteractionSoundService>((ref) {
+  final service = LocalInteractionSoundService();
+  ref.onDispose(service.dispose);
+  return service;
 });

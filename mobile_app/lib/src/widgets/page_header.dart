@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'app_drawer_controller.dart';
 
 class PageHeader extends StatelessWidget {
   const PageHeader({super.key, required this.title});
@@ -11,11 +12,11 @@ class PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        IconButton(
-          key: const Key('app-drawer-menu-button'),
+        const IconButton(
+          key: Key('app-drawer-menu-button'),
           tooltip: '打开侧边栏',
-          icon: const Icon(Icons.menu),
-          onPressed: () => Scaffold.maybeOf(context)?.openDrawer(),
+          icon: Icon(Icons.menu),
+          onPressed: AppDrawerController.open,
         ),
         const SizedBox(width: 8),
         Expanded(

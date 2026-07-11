@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,7 +33,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   _VoiceStage _voiceStage = _VoiceStage.idle;
   bool _aiBusy = false;
   bool _recordingWillCancel = false;
-  bool _textInputMode = true;
+  bool _textInputMode = false;
 
   bool get _isInputLocked =>
       _aiBusy ||
@@ -103,6 +104,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _replaceMessage(recognizingIndex, _ChatMessage.user(normalized));
       _removeAssistantTyping();
       setState(() => _voiceStage = _VoiceStage.recognized);
+      unawaited(ref.read(interactionSoundServiceProvider).playXiu());
       await _submitText(normalized, addUserMessage: false);
     } catch (error) {
       _replaceMessage(recognizingIndex, const _ChatMessage.user('语音识别失败'));
@@ -185,6 +187,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       await ref.read(databaseProvider).deleteEntry(replaceConflictId);
     }
     final savedIds = await repository.saveCapture(draft, rawText);
+    unawaited(ref.read(interactionSoundServiceProvider).playDing());
     ref.read(captureConversationAgentProvider).reset();
     setState(() {
       _draft = null;
