@@ -12,6 +12,35 @@ import 'package:local_idea_capture/src/speech/volcengine_speech_service.dart';
 import 'package:local_idea_capture/src/theme/app_colors.dart';
 
 void main() {
+  testWidgets('shows the approved voice assistant empty state', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    expect(find.byKey(const Key('voice-assistant-prompt')), findsOneWidget);
+    expect(find.byIcon(Icons.smart_toy_outlined), findsOneWidget);
+    expect(find.text('AI 助手提示'), findsOneWidget);
+    expect(find.text('试着说出你的想法，我会帮你整理和保存。'), findsOneWidget);
+    expect(find.text('记录一个突发的灵感'), findsOneWidget);
+    expect(find.text('整理今天想做的几件事'), findsOneWidget);
+    expect(find.text('记录一个问题或需要解决的困扰'), findsOneWidget);
+
+    final inputBar = tester.widget<Container>(
+      find.byKey(const Key('voice-input-strip')),
+    );
+    expect(inputBar.constraints?.maxHeight, 60);
+  });
+
   testWidgets('uses one input bar to switch between text and voice modes',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -68,7 +97,8 @@ void main() {
     final strip =
         tester.widget<Container>(find.byKey(const Key('voice-input-strip')));
     final decoration = strip.decoration as BoxDecoration;
-    expect(decoration.color, AppColors.surfaceSoft);
+    expect(decoration.color, AppColors.surface);
+    expect(decoration.borderRadius, BorderRadius.circular(18));
   });
 
   testWidgets('streams assistant text and shows a draft card after completion',
@@ -197,10 +227,12 @@ void main() {
 
     final center =
         tester.getCenter(find.byKey(const Key('voice-press-button')));
+    expect(find.byKey(const Key('voice-assistant-prompt')), findsOneWidget);
     final gesture = await tester.startGesture(center);
     await tester.pump(const Duration(milliseconds: 20));
 
     expect(find.byKey(const Key('voice-recording-overlay')), findsOneWidget);
+    expect(find.byKey(const Key('voice-assistant-prompt')), findsNothing);
 
     await gesture.up();
     await tester.pumpAndSettle();

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_idea_capture/src/data/app_database.dart';
+import 'package:local_idea_capture/src/data/entry_repository.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/features/query/query_page.dart';
 import 'package:local_idea_capture/src/providers.dart';
@@ -106,6 +109,7 @@ void main() {
   testWidgets('reveals a delete action and removes only the selected idea',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
+    final repository = _ControlledRefreshEntryRepository(database);
     addTearDown(database.close);
 
     final deleteId = await database.saveIdea(
@@ -147,7 +151,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(database)],
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          entryRepositoryProvider.overrideWithValue(repository),
+        ],
         child: const MaterialApp(home: Scaffold(body: IdeaQueryPage())),
       ),
     );
@@ -176,7 +183,19 @@ void main() {
     expect(find.text('Delete this idea'), findsOneWidget);
     expect(await database.searchIdeas('Delete this idea'), hasLength(1));
 
-    await tester.pump(const Duration(milliseconds: 440));
+    await tester.pump(const Duration(milliseconds: 420));
+    for (var attempt = 0;
+        attempt < 10 && repository.refreshCompleter == null;
+        attempt++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    expect(repository.refreshCompleter, isNull);
+    expect(
+      find.byKey(Key('idea-card-$deleteId')).hitTestable(),
+      findsNothing,
+    );
+
     await tester.pumpAndSettle();
 
     expect(find.text('Delete this idea'), findsNothing);
@@ -185,4 +204,21 @@ void main() {
     expect(await database.searchIdeas('Keep this idea'), hasLength(1));
     expect(find.byType(SnackBar), findsNothing);
   });
+}
+
+class _ControlledRefreshEntryRepository extends EntryRepository {
+  _ControlledRefreshEntryRepository(super.database);
+
+  var _searchCount = 0;
+  Completer<List<EntryListItem>>? refreshCompleter;
+
+  @override
+  Future<List<EntryListItem>> searchIdeas(String query) {
+    _searchCount++;
+    if (_searchCount == 1) {
+      return super.searchIdeas(query);
+    }
+    refreshCompleter = Completer<List<EntryListItem>>();
+    return refreshCompleter!.future;
+  }
 }

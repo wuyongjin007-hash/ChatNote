@@ -151,6 +151,7 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
   late String _query;
   late Future<List<EntryListItem>> _ideas;
   final _deletingIdeaIds = <String>{};
+  final _hiddenIdeaIds = <String>{};
 
   @override
   void initState() {
@@ -183,7 +184,7 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
     }
     setState(() {
       _deletingIdeaIds.remove(id);
-      _ideas = repository.searchIdeas(_query);
+      _hiddenIdeaIds.add(id);
     });
   }
 
@@ -195,7 +196,9 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final ideas = snapshot.data!;
+        final ideas = snapshot.data!
+            .where((idea) => !_hiddenIdeaIds.contains(idea.id))
+            .toList(growable: false);
         if (ideas.isEmpty) {
           return const Center(child: Text('还没有想法。'));
         }

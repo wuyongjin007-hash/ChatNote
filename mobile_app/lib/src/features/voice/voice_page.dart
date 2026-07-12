@@ -22,9 +22,7 @@ class VoicePage extends ConsumerStatefulWidget {
 class _VoicePageState extends ConsumerState<VoicePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  final _messages = <_ChatMessage>[
-    const _ChatMessage.assistant('按住麦克风说出待办或闪念。也可以先用文字输入测试。'),
-  ];
+  final _messages = <_ChatMessage>[];
 
   CaptureResult? _draft;
   String? _rawText;
@@ -34,6 +32,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   bool _aiBusy = false;
   bool _recordingWillCancel = false;
   bool _textInputMode = false;
+  bool _conversationStarted = false;
 
   bool get _isInputLocked =>
       _aiBusy ||
@@ -62,6 +61,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
 
   Future<void> _startRecording() async {
     setState(() {
+      _conversationStarted = true;
       _voiceStage = _VoiceStage.recording;
       _recordingWillCancel = false;
     });
@@ -141,6 +141,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   Future<void> _submitText(String text, {bool addUserMessage = true}) async {
     late final int assistantMessageIndex;
     setState(() {
+      _conversationStarted = true;
       _aiBusy = true;
       _voiceStage = _VoiceStage.organizing;
       _deleteMatches = const [];
@@ -195,9 +196,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _conflicts = const [];
       _aiBusy = false;
       _voiceStage = _VoiceStage.idle;
-      _messages.add(_ChatMessage.assistant(savedIds.length > 1
-          ? '已保存 ${savedIds.length} 条待办'
-          : '已保存'));
+      _messages.add(_ChatMessage.assistant(
+          savedIds.length > 1 ? '已保存 ${savedIds.length} 条待办' : '已保存'));
     });
     _scrollToBottom();
   }
@@ -357,29 +357,32 @@ class _VoicePageState extends ConsumerState<VoicePage> {
               const PageHeader(title: '语音记录'),
               const SizedBox(height: 12),
               Expanded(
-                child: ListView(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.only(bottom: 12),
-                  children: [
-                    for (final message in _messages)
-                      _ChatBubble(message: message),
-                    if (_draft != null)
-                      _DraftCard(
-                        draft: _draft!,
-                        conflicts: _conflicts,
-                        onSave: () => _saveDraft(),
-                        onDiscard: _discardDraft,
-                        onReplaceConflict: (id) =>
-                            _saveDraft(replaceConflictId: id),
+                child: !_conversationStarted && _messages.isEmpty
+                    ? const _VoiceAssistantPrompt()
+                    : ListView(
+                        key: const Key('voice-conversation-list'),
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(bottom: 12),
+                        children: [
+                          for (final message in _messages)
+                            _ChatBubble(message: message),
+                          if (_draft != null)
+                            _DraftCard(
+                              draft: _draft!,
+                              conflicts: _conflicts,
+                              onSave: () => _saveDraft(),
+                              onDiscard: _discardDraft,
+                              onReplaceConflict: (id) =>
+                                  _saveDraft(replaceConflictId: id),
+                            ),
+                          if (_deleteMatches.isNotEmpty)
+                            _TodoDeleteCard(
+                              matches: _deleteMatches,
+                              onCancel: _cancelTodoDeletion,
+                              onConfirm: _confirmTodoDeletion,
+                            ),
+                        ],
                       ),
-                    if (_deleteMatches.isNotEmpty)
-                      _TodoDeleteCard(
-                        matches: _deleteMatches,
-                        onCancel: _cancelTodoDeletion,
-                        onConfirm: _confirmTodoDeletion,
-                      ),
-                  ],
-                ),
               ),
               if (_aiBusy) const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 8),
@@ -401,6 +404,101 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         if (_voiceStage == _VoiceStage.recording)
           _RecordingOverlay(willCancel: _recordingWillCancel),
       ],
+    );
+  }
+}
+
+class _VoiceAssistantPrompt extends StatelessWidget {
+  const _VoiceAssistantPrompt();
+
+  static const _prompts = [
+    '记录一个突发的灵感',
+    '整理今天想做的几件事',
+    '记录一个问题或需要解决的困扰',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      key: const Key('voice-assistant-prompt'),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.055),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.smart_toy_outlined,
+                      color: Color(0xffc7921e),
+                      size: 32,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'AI 助手提示',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  '试着说出你的想法，我会帮你整理和保存。',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                for (var index = 0; index < _prompts.length; index++) ...[
+                  Container(
+                    key: Key('voice-assistant-prompt-row-$index'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Text(
+                      _prompts[index],
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  if (index < _prompts.length - 1) const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -716,19 +814,18 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       key: const Key('voice-input-strip'),
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.08),
-            blurRadius: 18,
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
             offset: const Offset(0, 8),
           ),
         ],
@@ -737,7 +834,10 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
         children: [
           IconButton(
             onPressed: widget.enabled ? () {} : null,
-            icon: const Icon(Icons.photo_camera_outlined),
+            icon: const Icon(
+              Icons.photo_camera_outlined,
+              color: AppColors.textSecondary,
+            ),
             tooltip: '拍照',
           ),
           const SizedBox(width: 4),
@@ -781,24 +881,20 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
                       onPointerUp: _handleVoicePointerUp,
                       onPointerCancel: _handleVoicePointerCancel,
                       child: Container(
-                        height: 44,
+                        height: 52,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(11),
-                        ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _SideSignalIcon(),
+                            _SideSignalIcon(color: Color(0xffc7921e)),
                             SizedBox(width: 8),
                             Text(
                               '按住说话',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xff111827),
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],
@@ -813,7 +909,10 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
             onPressed: widget.enabled ? widget.onToggleMode : null,
             icon: widget.isTextMode
                 ? const _SideSignalIcon()
-                : const Icon(Icons.keyboard_alt_outlined),
+                : const Icon(
+                    Icons.keyboard_alt_outlined,
+                    color: AppColors.textSecondary,
+                  ),
             tooltip: widget.isTextMode ? '切换到语音输入' : '切换到文字输入',
           ),
         ],
@@ -823,7 +922,9 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
 }
 
 class _SideSignalIcon extends StatelessWidget {
-  const _SideSignalIcon();
+  const _SideSignalIcon({this.color});
+
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -831,7 +932,7 @@ class _SideSignalIcon extends StatelessWidget {
       key: const Key('voice-side-signal-icon'),
       size: const Size(28, 28),
       painter: _SideSignalPainter(
-        color: IconTheme.of(context).color ?? const Color(0xff111827),
+        color: color ?? IconTheme.of(context).color ?? const Color(0xff111827),
       ),
     );
   }
