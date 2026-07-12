@@ -6,6 +6,10 @@ class CaptureSessions extends Table {
   late final TextColumn status = text()();
   late final TextColumn createdAt = text()();
   late final TextColumn updatedAt = text()();
+  late final TextColumn conversationJson = text().nullable()();
+  late final TextColumn activeDraftJson = text().nullable()();
+  late final TextColumn recoverableDraftJson = text().nullable()();
+  late final TextColumn expiresAt = text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};

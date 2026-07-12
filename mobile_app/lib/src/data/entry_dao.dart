@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -23,6 +25,7 @@ class EntryListItem {
     this.summary,
     this.tags = const [],
     this.status = 'pending',
+    this.reminderAt,
   });
 
   final String id;
@@ -39,6 +42,7 @@ class EntryListItem {
   final String? summary;
   final List<String> tags;
   final String status;
+  final DateTime? reminderAt;
 }
 
 class IdeaPageCursor {
@@ -58,6 +62,76 @@ class IdeaPage {
   final List<EntryListItem> items;
   final IdeaPageCursor? nextCursor;
   final bool hasMore;
+}
+
+class CaptureSessionRow {
+  const CaptureSessionRow({
+    required this.id,
+    required this.rawText,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.conversationJson,
+    this.activeDraftJson,
+    this.recoverableDraftJson,
+    this.expiresAt,
+  });
+
+  final String id;
+  final String rawText;
+  final String status;
+  final String createdAt;
+  final String updatedAt;
+  final String? conversationJson;
+  final String? activeDraftJson;
+  final String? recoverableDraftJson;
+  final String? expiresAt;
+
+  List<Map<String, String>> parseConversation() {
+    if (conversationJson == null || conversationJson!.isEmpty) {
+      return [];
+    }
+    try {
+      final decoded = jsonDecode(conversationJson!);
+      return (decoded as List<dynamic>)
+          .map((item) => Map<String, String>.from(item as Map))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  CaptureResult? parseActiveDraft() {
+    if (activeDraftJson == null || activeDraftJson!.isEmpty) {
+      return null;
+    }
+    try {
+      return CaptureResult.fromJson(
+          jsonDecode(activeDraftJson!) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CaptureResult? parseRecoverableDraft() {
+    if (recoverableDraftJson == null || recoverableDraftJson!.isEmpty) {
+      return null;
+    }
+    try {
+      return CaptureResult.fromJson(
+          jsonDecode(recoverableDraftJson!) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool get isRecoverable {
+    if (expiresAt == null) {
+      return false;
+    }
+    final expiry = DateTime.tryParse(expiresAt!);
+    return expiry != null && expiry.isAfter(DateTime.now());
+  }
 }
 
 @DriftAccessor(tables: [Entries, Todos, Ideas, Tags, EntryTags])
@@ -175,7 +249,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   Future<List<EntryListItem>> loadTodos(DateTime from, DateTime to) async {
     final rows = await db.customSelect(
       '''
-      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
       FROM entries e
       JOIN todos t ON t.entry_id = e.id
       WHERE t.start_at IS NOT NULL
@@ -191,6 +265,57 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     ).get();
 
     return rows.map(_todoFromRow).toList(growable: false);
+  }
+
+  Future<List<EntryListItem>> queryTodos(TodoQueryPayload payload) async {
+    final conditions = <String>['t.start_at IS NOT NULL'];
+    final vars = <Variable>[];
+
+    if (payload.dateFrom != null) {
+      conditions.add('t.start_at >= ?');
+      vars.add(Variable.withString(payload.dateFrom!.toIso8601String()));
+    }
+
+    if (payload.dateTo != null) {
+      conditions.add('t.start_at < ?');
+      vars.add(Variable.withString(payload.dateTo!.toIso8601String()));
+    }
+
+    if (!payload.includeCompleted) {
+      conditions.add("(t.status IS NULL OR t.status != 'completed')");
+    }
+
+    final whereClause = conditions.join(' AND ');
+
+    final rows = await db.customSelect(
+      '''
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
+      FROM entries e
+      JOIN todos t ON t.entry_id = e.id
+      WHERE $whereClause
+      ORDER BY t.start_at ASC
+      ''',
+      variables: vars,
+      readsFrom: {entries, todos},
+    ).get();
+
+    var results = rows.map(_todoFromRow).toList(growable: false);
+
+    if (payload.keyword != null && payload.keyword!.trim().isNotEmpty) {
+      final keyword = payload.keyword!.trim().toLowerCase();
+      results = results.where((item) {
+        final searchable = [
+          item.title,
+          item.topic ?? '',
+          item.location ?? '',
+          item.rawText,
+          item.normalizedText,
+        ].join('\n').toLowerCase();
+        return searchable.contains(keyword);
+      }).toList(growable: false);
+    }
+
+    return results;
   }
 
   Future<List<EntryListItem>> searchIdeas(String query) async {
@@ -250,7 +375,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       TodoDeletePayload payload) async {
     final rows = await db.customSelect(
       '''
-      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
       FROM entries e
       JOIN todos t ON t.entry_id = e.id
       WHERE t.start_at IS NOT NULL AND t.end_at IS NOT NULL
@@ -339,6 +464,94 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       await delete(entries).go();
       await delete(db.captureSessions).go();
     });
+  }
+
+  Future<void> upsertSession({
+    required String id,
+    required String rawText,
+    required String status,
+    required String createdAt,
+    required String updatedAt,
+    String? conversationJson,
+    String? activeDraftJson,
+    String? recoverableDraftJson,
+    String? expiresAt,
+  }) async {
+    await into(db.captureSessions).insertOnConflictUpdate(
+      CaptureSessionsCompanion(
+        id: Value(id),
+        rawText: Value(rawText),
+        status: Value(status),
+        createdAt: Value(createdAt),
+        updatedAt: Value(updatedAt),
+        conversationJson: Value(conversationJson),
+        activeDraftJson: Value(activeDraftJson),
+        recoverableDraftJson: Value(recoverableDraftJson),
+        expiresAt: Value(expiresAt),
+      ),
+    );
+  }
+
+  Future<CaptureSessionRow?> loadSession(String id) async {
+    final rows = await (db.select(db.captureSessions)
+          ..where((table) => table.id.equals(id)))
+        .get();
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _sessionFromRow(rows.first);
+  }
+
+  Future<CaptureSessionRow?> loadLatestRecoverableSession() async {
+    final now = DateTime.now().toIso8601String();
+    final rows = await db.customSelect(
+      '''
+      SELECT * FROM capture_sessions
+      WHERE status = 'cancelledRecoverable'
+        AND expires_at IS NOT NULL
+        AND expires_at > ?
+      ORDER BY updated_at DESC
+      LIMIT 1
+      ''',
+      variables: [Variable.withString(now)],
+      readsFrom: {db.captureSessions},
+    ).get();
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _sessionFromRow(rows.first);
+  }
+
+  Future<void> deleteSession(String id) async {
+    await (db.delete(db.captureSessions)
+          ..where((table) => table.id.equals(id)))
+        .go();
+  }
+
+  CaptureSessionRow _sessionFromRow(dynamic row) {
+    return CaptureSessionRow(
+      id: row is QueryRow ? row.read<String>('id') : row.id,
+      rawText:
+          row is QueryRow ? row.read<String>('raw_text') : row.rawText,
+      status: row is QueryRow ? row.read<String>('status') : row.status,
+      createdAt:
+          row is QueryRow ? row.read<String>('created_at') : row.createdAt,
+      updatedAt:
+          row is QueryRow ? row.read<String>('updated_at') : row.updatedAt,
+      conversationJson: row is QueryRow
+          ? row.readNullable<String>('conversation_json')
+          : row.conversationJson,
+      activeDraftJson: row is QueryRow
+          ? row.readNullable<String>('active_draft_json')
+          : row.activeDraftJson,
+      recoverableDraftJson: row is QueryRow
+          ? row.readNullable<String>('recoverable_draft_json')
+          : row.recoverableDraftJson,
+      expiresAt: row is QueryRow
+          ? row.readNullable<String>('expires_at')
+          : row.expiresAt,
+    );
   }
 
   Future<void> _insertEntry({
@@ -523,6 +736,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       location: row.readNullable<String>('location'),
       topic: row.readNullable<String>('topic'),
       status: row.read<String>('status'),
+      reminderAt: _readDate(row, 'reminder_at'),
     );
   }
 

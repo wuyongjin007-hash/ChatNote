@@ -38,6 +38,7 @@ final captureConversationAgentProvider =
   final arkClient = ref.watch(volcengineArkCaptureClientProvider);
   return CaptureConversationAgent(
     heuristics: ref.watch(localCaptureHeuristicsProvider),
+    repository: ref.watch(entryRepositoryProvider),
     capture: (request) {
       return arkClient.captureText(
         text: request.text,

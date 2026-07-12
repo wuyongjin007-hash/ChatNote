@@ -43,6 +43,50 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   void initState() {
     super.initState();
     _textController.addListener(_refreshTextInput);
+    _restoreDisplayFromAgent();
+  }
+
+  void _restoreDisplayFromAgent() {
+    final snapshot =
+        ref.read(captureConversationAgentProvider).displaySnapshot;
+    if (snapshot.messages.isEmpty) {
+      return;
+    }
+    _draft = snapshot.activeDraft;
+    final agent = ref.read(captureConversationAgentProvider);
+    _rawText = agent.memory
+        .where((m) => m['role'] == 'user')
+        .map((m) => m['content'] as String)
+        .join('\n');
+    setState(() {
+      _conversationStarted = true;
+      for (final msg in snapshot.messages) {
+        _messages.add(
+          msg.isUser
+              ? _ChatMessage.user(msg.text)
+              : _ChatMessage.assistant(msg.text),
+        );
+      }
+    });
+    _scrollToBottom();
+  }
+
+  Future<void> _tryRestoreSession() async {
+    final restored =
+        await ref.read(captureConversationAgentProvider).restoreSession();
+    if (!mounted || !restored) {
+      return;
+    }
+    final agent = ref.read(captureConversationAgentProvider);
+    final draft = agent.draft;
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _conversationStarted = true;
+      _draft = draft;
+      _addAssistant('已恢复上次取消的录入，你可以继续补充或修改。');
+    });
   }
 
   @override
@@ -99,11 +143,17 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       final normalized = text.trim();
       if (normalized.isEmpty) {
         _replaceMessage(recognizingIndex, const _ChatMessage.user('未识别到语音内容'));
+        ref.read(captureConversationAgentProvider).appendDisplayMessage(
+              const ConversationMessage(isUser: true, text: '未识别到语音内容'),
+            );
         _removeAssistantTyping();
         setState(() => _voiceStage = _VoiceStage.error);
         return;
       }
       _replaceMessage(recognizingIndex, _ChatMessage.user(normalized));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            ConversationMessage(isUser: true, text: normalized),
+          );
       _removeAssistantTyping();
       setState(() => _voiceStage = _VoiceStage.recognized);
       await _submitText(normalized, addUserMessage: false);
@@ -148,6 +198,9 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _deleteMatches = const [];
       if (addUserMessage) {
         _messages.add(_ChatMessage.user(text));
+        ref.read(captureConversationAgentProvider).appendDisplayMessage(
+              ConversationMessage(isUser: true, text: text),
+            );
       }
       _messages.add(const _ChatMessage.assistant(''));
       assistantMessageIndex = _messages.length - 1;
@@ -173,7 +226,11 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     if (draft == null || rawText == null) {
       return;
     }
-    if (draft.missingFields.isNotEmpty || !draft.shouldSave) {
+    if (draft.missingFields
+        .where((field) =>
+            field != 'location' && field != 'topic' && field != 'reminder_at')
+        .isNotEmpty ||
+        !draft.shouldSave) {
       _addAssistant(draft.followUpQuestion ?? '这条记录还缺少关键信息，请继续补充。');
       return;
     }
@@ -190,7 +247,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     }
     final savedIds = await repository.saveCapture(draft, rawText);
     unawaited(ref.read(interactionSoundServiceProvider).playDing());
-    ref.read(captureConversationAgentProvider).reset();
+    await ref.read(captureConversationAgentProvider).completeDraft();
     setState(() {
       _draft = null;
       _rawText = null;
@@ -199,6 +256,13 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _voiceStage = _VoiceStage.idle;
       _messages.add(_ChatMessage.assistant(
           savedIds.length > 1 ? '已保存 ${savedIds.length} 条待办' : '已保存'));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            ConversationMessage(
+                isUser: false,
+                text: savedIds.length > 1
+                    ? '已保存 ${savedIds.length} 条待办'
+                    : '已保存'),
+          );
     });
     _scrollToBottom();
   }
@@ -219,6 +283,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _deleteMatches = const [];
       _aiBusy = false;
       _messages.add(_ChatMessage.assistant('已删除 ${matches.length} 条待办。'));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            ConversationMessage(
+                isUser: false, text: '已删除 ${matches.length} 条待办。'),
+          );
     });
     _scrollToBottom();
   }
@@ -227,25 +295,36 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     setState(() {
       _deleteMatches = const [];
       _messages.add(const _ChatMessage.assistant('已取消删除。'));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            const ConversationMessage(isUser: false, text: '已取消删除。'),
+          );
     });
     _scrollToBottom();
   }
 
-  void _discardDraft() {
-    ref.read(captureConversationAgentProvider).reset();
+  void _discardDraft() async {
+    await ref.read(captureConversationAgentProvider).cancelDraft();
     setState(() {
       _draft = null;
       _rawText = null;
       _conflicts = const [];
       _deleteMatches = const [];
       _voiceStage = _VoiceStage.idle;
-      _messages.add(const _ChatMessage.assistant('已取消本次录入。'));
+      _messages.add(const _ChatMessage.assistant(
+          '已取消本次录入，30分钟内可以继续修改刚才的内容。'));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            const ConversationMessage(
+                isUser: false, text: '已取消本次录入，30分钟内可以继续修改刚才的内容。'),
+          );
     });
     _scrollToBottom();
   }
 
   void _addAssistant(String text) {
     setState(() => _messages.add(_ChatMessage.assistant(text)));
+    ref.read(captureConversationAgentProvider).appendDisplayMessage(
+          ConversationMessage(isUser: false, text: text),
+        );
     _scrollToBottom();
   }
 
@@ -280,6 +359,37 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   Future<void> _applyCompletedTurn(
       CaptureTurn turn, int assistantMessageIndex) async {
     final capture = turn.capture;
+
+    if (capture.intentType == CaptureIntentType.todoQuery) {
+      final payload = capture.todoQueryPayload;
+      if (payload == null) {
+        _replaceMessage(assistantMessageIndex,
+            const _ChatMessage.assistant('未能解析查询条件，请换个说法试试。'));
+        setState(() {
+          _aiBusy = false;
+          _voiceStage = _VoiceStage.idle;
+        });
+        return;
+      }
+
+      final results = await ref.read(entryRepositoryProvider).queryTodos(payload);
+      if (!mounted) {
+        return;
+      }
+
+      final queryReply = _buildQueryReply(payload, results, capture);
+      _replaceMessage(assistantMessageIndex, _ChatMessage.assistant(queryReply));
+      ref.read(captureConversationAgentProvider).appendDisplayMessage(
+            ConversationMessage(isUser: false, text: queryReply),
+          );
+      setState(() {
+        _aiBusy = false;
+        _voiceStage = _VoiceStage.idle;
+      });
+      _scrollToBottom();
+      return;
+    }
+
     if (capture.intentType == CaptureIntentType.todoDelete) {
       final payload = capture.todoDeletePayload;
       final matches = payload == null
@@ -297,14 +407,26 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         _conflicts = const [];
         _deleteMatches = matches;
         if (_messages[assistantMessageIndex].text.trim().isEmpty) {
+          final deleteText = matches.isEmpty
+              ? '没有找到符合条件的待办。'
+              : '找到了 ${matches.length} 条待办，请确认是否删除。';
           _messages[assistantMessageIndex] =
               _messages[assistantMessageIndex].copyWith(
-            text: matches.isEmpty
-                ? '没有找到符合条件的待办。'
-                : '找到了 ${matches.length} 条待办，请确认是否删除。',
+            text: deleteText,
           );
         } else if (matches.isEmpty) {
           _messages.add(const _ChatMessage.assistant('没有找到符合条件的待办。'));
+          ref.read(captureConversationAgentProvider).appendDisplayMessage(
+                const ConversationMessage(
+                    isUser: false, text: '没有找到符合条件的待办。'),
+              );
+        }
+        final deleteDisplayText =
+            _messages[assistantMessageIndex].text.trim();
+        if (deleteDisplayText.isNotEmpty) {
+          ref.read(captureConversationAgentProvider).appendDisplayMessage(
+                ConversationMessage(isUser: false, text: deleteDisplayText),
+              );
         }
         _aiBusy = false;
         _voiceStage = _VoiceStage.idle;
@@ -327,6 +449,14 @@ class _VoicePageState extends ConsumerState<VoicePage> {
           text: capture.followUpQuestion ?? '我整理好了，请确认是否保存。',
         );
       }
+      final assistantDisplayText =
+          _messages[assistantMessageIndex].text.trim();
+      if (assistantDisplayText.isNotEmpty) {
+        ref.read(captureConversationAgentProvider).appendDisplayMessage(
+              ConversationMessage(
+                  isUser: false, text: assistantDisplayText),
+            );
+      }
       _aiBusy = false;
       _voiceStage = _VoiceStage.idle;
     });
@@ -344,6 +474,115 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  String _buildQueryReply(
+      TodoQueryPayload payload, List<EntryListItem> results, CaptureResult capture) {
+    final buffer = StringBuffer();
+    final dateLabel = _queryDateLabel(payload);
+    buffer.writeln(dateLabel);
+
+    if (results.isEmpty) {
+      buffer.write('暂时没有');
+      buffer.write(payload.includeCompleted ? '' : '未完成的');
+      buffer.write('待办。');
+      return buffer.toString();
+    }
+
+    buffer.writeln('共 ${results.length} 条待办：');
+    for (final todo in results) {
+      final time = todo.startAt != null ? _shortTime(todo.startAt!) : '--:--';
+      buffer.writeln('$time ${todo.title}');
+    }
+
+    buffer.writeln();
+
+    final suggestions = _generateSuggestions(results, payload);
+    if (suggestions.isNotEmpty) {
+      buffer.write(suggestions);
+    }
+
+    return buffer.toString().trim();
+  }
+
+  String _queryDateLabel(TodoQueryPayload payload) {
+    if (payload.dateFrom != null && payload.dateTo != null) {
+      final diff =
+          payload.dateTo!.difference(payload.dateFrom!).inDays;
+      if (diff == 1) {
+        final month = payload.dateFrom!.month;
+        final day = payload.dateFrom!.day;
+        return '${month}月${day}日的待办：';
+      }
+      if (diff <= 7) {
+        final fromMonth = payload.dateFrom!.month;
+        final fromDay = payload.dateFrom!.day;
+        final toMonth = payload.dateTo!.month;
+        final toDay = payload.dateTo!.day;
+        return '${fromMonth}月${fromDay}日 至 ${toMonth}月${toDay}日的待办：';
+      }
+    }
+    return '查询结果：';
+  }
+
+  String _generateSuggestions(
+      List<EntryListItem> todos, TodoQueryPayload payload) {
+    final suggestions = <String>[];
+    final sortedTodos = todos
+        .where((todo) => todo.startAt != null)
+        .toList()
+      ..sort((a, b) => a.startAt!.compareTo(b.startAt!));
+
+    for (var index = 0; index < sortedTodos.length - 1; index++) {
+      final current = sortedTodos[index];
+      final next = sortedTodos[index + 1];
+      if (current.endAt != null && next.startAt != null) {
+        final gap =
+            next.startAt!.difference(current.endAt!).inMinutes;
+        if (gap < 30 && gap >= 0) {
+          suggestions.add(
+              '「${current.title}」和「${next.title}」间隔较短（${gap}分钟），建议提前安排出行时间。');
+        } else if (gap < 0) {
+          suggestions.add(
+              '「${current.title}」与「${next.title}」时间重叠，请注意调整。');
+        }
+      }
+    }
+
+    for (final todo in sortedTodos) {
+      if (todo.reminderAt == null && todo.startAt != null) {
+        final untilStart = todo.startAt!.difference(DateTime.now()).inMinutes;
+        if (untilStart > 0 && untilStart < 120) {
+          suggestions.add('「${todo.title}」即将开始，还没有设置提醒。');
+        }
+      }
+      if (todo.endAt != null && todo.startAt != null) {
+        final duration =
+            todo.endAt!.difference(todo.startAt!).inMinutes;
+        if (duration > 120) {
+          suggestions.add('「${todo.title}」持续时间较长（${duration}分钟）。');
+        }
+      }
+    }
+
+    final todayStart = DateTime.now();
+    final todayEnd =
+        DateTime(todayStart.year, todayStart.month, todayStart.day + 1);
+    final todayCount = sortedTodos
+        .where((todo) =>
+            todo.startAt != null &&
+            !todo.startAt!.isBefore(todayStart) &&
+            todo.startAt!.isBefore(todayEnd))
+        .length;
+    if (todayCount > 5) {
+      suggestions.add('今天安排较密（$todayCount 项），建议合理分配精力。');
+    }
+
+    if (suggestions.isEmpty) {
+      return '';
+    }
+
+    return '\n建议：\n${suggestions.map((s) => '• $s').join('\n')}';
   }
 
   @override
@@ -518,36 +757,100 @@ class _TodoDeleteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visible = matches.take(3);
-    return Card(
+    return Container(
       key: const Key('todo-delete-confirmation-card'),
       margin: const EdgeInsets.symmetric(vertical: 12),
-      color: AppColors.surface,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: AppColors.border),
+        border: Border.all(color: AppColors.accentBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0f3d3528),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '准备删除 ${matches.length} 条待办',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '准备删除 ${matches.length} 条待办',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             for (final item in visible)
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
-                child: Text('${_shortTime(item.startAt)} ${item.title}'),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _shortTime(item.startAt),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(item.title)),
+                  ],
+                ),
               ),
-            if (matches.length > 3) Text('还有 ${matches.length - 3} 条...'),
+            if (matches.length > 3)
+              Text(
+                '还有 ${matches.length - 3} 条...',
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
             const SizedBox(height: 12),
             Row(
               children: [
-                OutlinedButton(onPressed: onCancel, child: const Text('取消')),
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.textMuted),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: onCancel,
+                    child: const Text('取消'),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                FilledButton(onPressed: onConfirm, child: const Text('确认删除')),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: onConfirm,
+                    child: const Text('确认删除'),
+                  ),
+                ),
               ],
             ),
           ],
@@ -662,9 +965,12 @@ class _DraftCard extends StatelessWidget {
                   ),
                 ),
             ],
-            if (draft.missingFields.isNotEmpty) ...[
+            if (draft.missingFields
+                    .where((f) => _fieldLabel(f) != null)
+                    .isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text('缺少信息：${draft.missingFields.join('、')}',
+              Text(
+                  '缺少信息：${draft.missingFields.where((f) => _fieldLabel(f) != null).map((f) => _fieldLabel(f)!).join('、')}',
                   style: const TextStyle(color: Colors.orange)),
             ],
             if (conflicts.isNotEmpty) ...[
@@ -686,16 +992,35 @@ class _DraftCard extends StatelessWidget {
                       for (final conflict in conflicts)
                         Text('${conflict.title}  ${_timeRange(conflict)}'),
                       const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      Row(
                         children: [
-                          OutlinedButton(
-                              onPressed: onDiscard, child: const Text('保留原日程')),
-                          const SizedBox(height: 8),
-                          FilledButton(
-                            onPressed: () =>
-                                onReplaceConflict(conflicts.first.id),
-                            child: const Text('删除原日程并保存本次'),
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(color: AppColors.textMuted),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: onDiscard,
+                              child: const Text('保留原日程'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.accent,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: () =>
+                                  onReplaceConflict(conflicts.first.id),
+                              child: const Text('删除原日程'),
+                            ),
                           ),
                         ],
                       ),
@@ -1261,6 +1586,18 @@ String _timeRange(TodoTimeBlock block) {
   final end = block.endAt.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
   return '${two(start.hour)}:${two(start.minute)}-${two(end.hour)}:${two(end.minute)}';
+}
+
+String? _fieldLabel(String field) {
+  const map = {
+    'start_at': '时间',
+    'end_at': '结束时间',
+    'title': '事项',
+    'location': '地点',
+    'topic': '主题',
+    'reminder_at': '提醒',
+  };
+  return map[field];
 }
 
 String _shortTime(DateTime? value) {

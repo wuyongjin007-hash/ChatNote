@@ -37,8 +37,13 @@ class EntryRepository {
           .saveIdea(capture: capture, rawText: rawText)
           .then((id) => [id]),
       CaptureIntentType.todoDelete => throw StateError('删除请求不能作为新记录保存'),
+      CaptureIntentType.todoQuery => throw StateError('查询请求不能作为新记录保存'),
       CaptureIntentType.unclear => throw StateError('无法保存未明确分类的记录'),
     };
+  }
+
+  Future<List<EntryListItem>> queryTodos(TodoQueryPayload payload) {
+    return _database.queryTodos(payload);
   }
 
   Future<List<EntryListItem>> findTodosForDeletion(TodoDeletePayload payload) {
@@ -82,4 +87,40 @@ class EntryRepository {
   }
 
   Future<void> clearAll() => _database.clearAll();
+
+  Future<void> upsertSession({
+    required String id,
+    required String rawText,
+    required String status,
+    required String createdAt,
+    required String updatedAt,
+    String? conversationJson,
+    String? activeDraftJson,
+    String? recoverableDraftJson,
+    String? expiresAt,
+  }) {
+    return _database.upsertSession(
+      id: id,
+      rawText: rawText,
+      status: status,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      conversationJson: conversationJson,
+      activeDraftJson: activeDraftJson,
+      recoverableDraftJson: recoverableDraftJson,
+      expiresAt: expiresAt,
+    );
+  }
+
+  Future<CaptureSessionRow?> loadSession(String id) {
+    return _database.loadSession(id);
+  }
+
+  Future<CaptureSessionRow?> loadLatestRecoverableSession() {
+    return _database.loadLatestRecoverableSession();
+  }
+
+  Future<void> deleteSession(String id) {
+    return _database.deleteSession(id);
+  }
 }

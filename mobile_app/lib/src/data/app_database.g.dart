@@ -37,9 +37,42 @@ class $CaptureSessionsTable extends CaptureSessions
   late final GeneratedColumn<String> updatedAt = GeneratedColumn<String>(
       'updated_at', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _conversationJsonMeta =
+      const VerificationMeta('conversationJson');
   @override
-  List<GeneratedColumn> get $columns =>
-      [id, rawText, status, createdAt, updatedAt];
+  late final GeneratedColumn<String> conversationJson = GeneratedColumn<String>(
+      'conversation_json', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _activeDraftJsonMeta =
+      const VerificationMeta('activeDraftJson');
+  @override
+  late final GeneratedColumn<String> activeDraftJson = GeneratedColumn<String>(
+      'active_draft_json', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _recoverableDraftJsonMeta =
+      const VerificationMeta('recoverableDraftJson');
+  @override
+  late final GeneratedColumn<String> recoverableDraftJson =
+      GeneratedColumn<String>('recoverable_draft_json', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _expiresAtMeta =
+      const VerificationMeta('expiresAt');
+  @override
+  late final GeneratedColumn<String> expiresAt = GeneratedColumn<String>(
+      'expires_at', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        rawText,
+        status,
+        createdAt,
+        updatedAt,
+        conversationJson,
+        activeDraftJson,
+        recoverableDraftJson,
+        expiresAt
+      ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -79,6 +112,28 @@ class $CaptureSessionsTable extends CaptureSessions
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('conversation_json')) {
+      context.handle(
+          _conversationJsonMeta,
+          conversationJson.isAcceptableOrUnknown(
+              data['conversation_json']!, _conversationJsonMeta));
+    }
+    if (data.containsKey('active_draft_json')) {
+      context.handle(
+          _activeDraftJsonMeta,
+          activeDraftJson.isAcceptableOrUnknown(
+              data['active_draft_json']!, _activeDraftJsonMeta));
+    }
+    if (data.containsKey('recoverable_draft_json')) {
+      context.handle(
+          _recoverableDraftJsonMeta,
+          recoverableDraftJson.isAcceptableOrUnknown(
+              data['recoverable_draft_json']!, _recoverableDraftJsonMeta));
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(_expiresAtMeta,
+          expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta));
+    }
     return context;
   }
 
@@ -98,6 +153,15 @@ class $CaptureSessionsTable extends CaptureSessions
           .read(DriftSqlType.string, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}updated_at'])!,
+      conversationJson: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}conversation_json']),
+      activeDraftJson: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}active_draft_json']),
+      recoverableDraftJson: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}recoverable_draft_json']),
+      expiresAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}expires_at']),
     );
   }
 
@@ -113,12 +177,20 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
   final String status;
   final String createdAt;
   final String updatedAt;
+  final String? conversationJson;
+  final String? activeDraftJson;
+  final String? recoverableDraftJson;
+  final String? expiresAt;
   const CaptureSession(
       {required this.id,
       required this.rawText,
       required this.status,
       required this.createdAt,
-      required this.updatedAt});
+      required this.updatedAt,
+      this.conversationJson,
+      this.activeDraftJson,
+      this.recoverableDraftJson,
+      this.expiresAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -127,6 +199,18 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<String>(createdAt);
     map['updated_at'] = Variable<String>(updatedAt);
+    if (!nullToAbsent || conversationJson != null) {
+      map['conversation_json'] = Variable<String>(conversationJson);
+    }
+    if (!nullToAbsent || activeDraftJson != null) {
+      map['active_draft_json'] = Variable<String>(activeDraftJson);
+    }
+    if (!nullToAbsent || recoverableDraftJson != null) {
+      map['recoverable_draft_json'] = Variable<String>(recoverableDraftJson);
+    }
+    if (!nullToAbsent || expiresAt != null) {
+      map['expires_at'] = Variable<String>(expiresAt);
+    }
     return map;
   }
 
@@ -137,6 +221,18 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
       status: Value(status),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      conversationJson: conversationJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(conversationJson),
+      activeDraftJson: activeDraftJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activeDraftJson),
+      recoverableDraftJson: recoverableDraftJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recoverableDraftJson),
+      expiresAt: expiresAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiresAt),
     );
   }
 
@@ -149,6 +245,11 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<String>(json['createdAt']),
       updatedAt: serializer.fromJson<String>(json['updatedAt']),
+      conversationJson: serializer.fromJson<String?>(json['conversationJson']),
+      activeDraftJson: serializer.fromJson<String?>(json['activeDraftJson']),
+      recoverableDraftJson:
+          serializer.fromJson<String?>(json['recoverableDraftJson']),
+      expiresAt: serializer.fromJson<String?>(json['expiresAt']),
     );
   }
   @override
@@ -160,6 +261,10 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<String>(createdAt),
       'updatedAt': serializer.toJson<String>(updatedAt),
+      'conversationJson': serializer.toJson<String?>(conversationJson),
+      'activeDraftJson': serializer.toJson<String?>(activeDraftJson),
+      'recoverableDraftJson': serializer.toJson<String?>(recoverableDraftJson),
+      'expiresAt': serializer.toJson<String?>(expiresAt),
     };
   }
 
@@ -168,13 +273,27 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
           String? rawText,
           String? status,
           String? createdAt,
-          String? updatedAt}) =>
+          String? updatedAt,
+          Value<String?> conversationJson = const Value.absent(),
+          Value<String?> activeDraftJson = const Value.absent(),
+          Value<String?> recoverableDraftJson = const Value.absent(),
+          Value<String?> expiresAt = const Value.absent()}) =>
       CaptureSession(
         id: id ?? this.id,
         rawText: rawText ?? this.rawText,
         status: status ?? this.status,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
+        conversationJson: conversationJson.present
+            ? conversationJson.value
+            : this.conversationJson,
+        activeDraftJson: activeDraftJson.present
+            ? activeDraftJson.value
+            : this.activeDraftJson,
+        recoverableDraftJson: recoverableDraftJson.present
+            ? recoverableDraftJson.value
+            : this.recoverableDraftJson,
+        expiresAt: expiresAt.present ? expiresAt.value : this.expiresAt,
       );
   CaptureSession copyWithCompanion(CaptureSessionsCompanion data) {
     return CaptureSession(
@@ -183,6 +302,16 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      conversationJson: data.conversationJson.present
+          ? data.conversationJson.value
+          : this.conversationJson,
+      activeDraftJson: data.activeDraftJson.present
+          ? data.activeDraftJson.value
+          : this.activeDraftJson,
+      recoverableDraftJson: data.recoverableDraftJson.present
+          ? data.recoverableDraftJson.value
+          : this.recoverableDraftJson,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
     );
   }
 
@@ -193,13 +322,18 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
           ..write('rawText: $rawText, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('conversationJson: $conversationJson, ')
+          ..write('activeDraftJson: $activeDraftJson, ')
+          ..write('recoverableDraftJson: $recoverableDraftJson, ')
+          ..write('expiresAt: $expiresAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, rawText, status, createdAt, updatedAt);
+  int get hashCode => Object.hash(id, rawText, status, createdAt, updatedAt,
+      conversationJson, activeDraftJson, recoverableDraftJson, expiresAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -208,7 +342,11 @@ class CaptureSession extends DataClass implements Insertable<CaptureSession> {
           other.rawText == this.rawText &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.conversationJson == this.conversationJson &&
+          other.activeDraftJson == this.activeDraftJson &&
+          other.recoverableDraftJson == this.recoverableDraftJson &&
+          other.expiresAt == this.expiresAt);
 }
 
 class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
@@ -217,6 +355,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
   final Value<String> status;
   final Value<String> createdAt;
   final Value<String> updatedAt;
+  final Value<String?> conversationJson;
+  final Value<String?> activeDraftJson;
+  final Value<String?> recoverableDraftJson;
+  final Value<String?> expiresAt;
   final Value<int> rowid;
   const CaptureSessionsCompanion({
     this.id = const Value.absent(),
@@ -224,6 +366,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.conversationJson = const Value.absent(),
+    this.activeDraftJson = const Value.absent(),
+    this.recoverableDraftJson = const Value.absent(),
+    this.expiresAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CaptureSessionsCompanion.insert({
@@ -232,6 +378,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
     required String status,
     required String createdAt,
     required String updatedAt,
+    this.conversationJson = const Value.absent(),
+    this.activeDraftJson = const Value.absent(),
+    this.recoverableDraftJson = const Value.absent(),
+    this.expiresAt = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         rawText = Value(rawText),
@@ -244,6 +394,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
     Expression<String>? status,
     Expression<String>? createdAt,
     Expression<String>? updatedAt,
+    Expression<String>? conversationJson,
+    Expression<String>? activeDraftJson,
+    Expression<String>? recoverableDraftJson,
+    Expression<String>? expiresAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -252,6 +406,11 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (conversationJson != null) 'conversation_json': conversationJson,
+      if (activeDraftJson != null) 'active_draft_json': activeDraftJson,
+      if (recoverableDraftJson != null)
+        'recoverable_draft_json': recoverableDraftJson,
+      if (expiresAt != null) 'expires_at': expiresAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -262,6 +421,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
       Value<String>? status,
       Value<String>? createdAt,
       Value<String>? updatedAt,
+      Value<String?>? conversationJson,
+      Value<String?>? activeDraftJson,
+      Value<String?>? recoverableDraftJson,
+      Value<String?>? expiresAt,
       Value<int>? rowid}) {
     return CaptureSessionsCompanion(
       id: id ?? this.id,
@@ -269,6 +432,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      conversationJson: conversationJson ?? this.conversationJson,
+      activeDraftJson: activeDraftJson ?? this.activeDraftJson,
+      recoverableDraftJson: recoverableDraftJson ?? this.recoverableDraftJson,
+      expiresAt: expiresAt ?? this.expiresAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -291,6 +458,19 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<String>(updatedAt.value);
     }
+    if (conversationJson.present) {
+      map['conversation_json'] = Variable<String>(conversationJson.value);
+    }
+    if (activeDraftJson.present) {
+      map['active_draft_json'] = Variable<String>(activeDraftJson.value);
+    }
+    if (recoverableDraftJson.present) {
+      map['recoverable_draft_json'] =
+          Variable<String>(recoverableDraftJson.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<String>(expiresAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -305,6 +485,10 @@ class CaptureSessionsCompanion extends UpdateCompanion<CaptureSession> {
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('conversationJson: $conversationJson, ')
+          ..write('activeDraftJson: $activeDraftJson, ')
+          ..write('recoverableDraftJson: $recoverableDraftJson, ')
+          ..write('expiresAt: $expiresAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1769,6 +1953,10 @@ typedef $$CaptureSessionsTableCreateCompanionBuilder = CaptureSessionsCompanion
   required String status,
   required String createdAt,
   required String updatedAt,
+  Value<String?> conversationJson,
+  Value<String?> activeDraftJson,
+  Value<String?> recoverableDraftJson,
+  Value<String?> expiresAt,
   Value<int> rowid,
 });
 typedef $$CaptureSessionsTableUpdateCompanionBuilder = CaptureSessionsCompanion
@@ -1778,6 +1966,10 @@ typedef $$CaptureSessionsTableUpdateCompanionBuilder = CaptureSessionsCompanion
   Value<String> status,
   Value<String> createdAt,
   Value<String> updatedAt,
+  Value<String?> conversationJson,
+  Value<String?> activeDraftJson,
+  Value<String?> recoverableDraftJson,
+  Value<String?> expiresAt,
   Value<int> rowid,
 });
 
@@ -1804,6 +1996,21 @@ class $$CaptureSessionsTableFilterComposer
 
   ColumnFilters<String> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get conversationJson => $composableBuilder(
+      column: $table.conversationJson,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get activeDraftJson => $composableBuilder(
+      column: $table.activeDraftJson,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get recoverableDraftJson => $composableBuilder(
+      column: $table.recoverableDraftJson,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get expiresAt => $composableBuilder(
+      column: $table.expiresAt, builder: (column) => ColumnFilters(column));
 }
 
 class $$CaptureSessionsTableOrderingComposer
@@ -1829,6 +2036,21 @@ class $$CaptureSessionsTableOrderingComposer
 
   ColumnOrderings<String> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get conversationJson => $composableBuilder(
+      column: $table.conversationJson,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get activeDraftJson => $composableBuilder(
+      column: $table.activeDraftJson,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get recoverableDraftJson => $composableBuilder(
+      column: $table.recoverableDraftJson,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get expiresAt => $composableBuilder(
+      column: $table.expiresAt, builder: (column) => ColumnOrderings(column));
 }
 
 class $$CaptureSessionsTableAnnotationComposer
@@ -1854,6 +2076,18 @@ class $$CaptureSessionsTableAnnotationComposer
 
   GeneratedColumn<String> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get conversationJson => $composableBuilder(
+      column: $table.conversationJson, builder: (column) => column);
+
+  GeneratedColumn<String> get activeDraftJson => $composableBuilder(
+      column: $table.activeDraftJson, builder: (column) => column);
+
+  GeneratedColumn<String> get recoverableDraftJson => $composableBuilder(
+      column: $table.recoverableDraftJson, builder: (column) => column);
+
+  GeneratedColumn<String> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
 }
 
 class $$CaptureSessionsTableTableManager extends RootTableManager<
@@ -1888,6 +2122,10 @@ class $$CaptureSessionsTableTableManager extends RootTableManager<
             Value<String> status = const Value.absent(),
             Value<String> createdAt = const Value.absent(),
             Value<String> updatedAt = const Value.absent(),
+            Value<String?> conversationJson = const Value.absent(),
+            Value<String?> activeDraftJson = const Value.absent(),
+            Value<String?> recoverableDraftJson = const Value.absent(),
+            Value<String?> expiresAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               CaptureSessionsCompanion(
@@ -1896,6 +2134,10 @@ class $$CaptureSessionsTableTableManager extends RootTableManager<
             status: status,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            conversationJson: conversationJson,
+            activeDraftJson: activeDraftJson,
+            recoverableDraftJson: recoverableDraftJson,
+            expiresAt: expiresAt,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -1904,6 +2146,10 @@ class $$CaptureSessionsTableTableManager extends RootTableManager<
             required String status,
             required String createdAt,
             required String updatedAt,
+            Value<String?> conversationJson = const Value.absent(),
+            Value<String?> activeDraftJson = const Value.absent(),
+            Value<String?> recoverableDraftJson = const Value.absent(),
+            Value<String?> expiresAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               CaptureSessionsCompanion.insert(
@@ -1912,6 +2158,10 @@ class $$CaptureSessionsTableTableManager extends RootTableManager<
             status: status,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            conversationJson: conversationJson,
+            activeDraftJson: activeDraftJson,
+            recoverableDraftJson: recoverableDraftJson,
+            expiresAt: expiresAt,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0

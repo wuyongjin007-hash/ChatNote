@@ -1,9 +1,18 @@
-enum CaptureIntentType { todo, idea, todoDelete, unclear }
+enum CaptureIntentType { todo, idea, todoDelete, todoQuery, unclear }
 
 CaptureIntentType captureIntentTypeFromJson(String value) {
   return CaptureIntentType.values.firstWhere(
     (type) => type.name == value,
     orElse: () => CaptureIntentType.unclear,
+  );
+}
+
+enum InteractionMode { newRequest, supplement, correction, query }
+
+InteractionMode interactionModeFromJson(String value) {
+  return InteractionMode.values.firstWhere(
+    (mode) => mode.name == value,
+    orElse: () => InteractionMode.newRequest,
   );
 }
 
@@ -17,6 +26,7 @@ class TodoPayload {
     required this.topic,
     required this.reminderAt,
     required this.status,
+    this.durationMinutes,
   });
 
   final String? title;
@@ -27,6 +37,35 @@ class TodoPayload {
   final String? topic;
   final DateTime? reminderAt;
   final String status;
+  final int? durationMinutes;
+
+  TodoPayload copyWith({
+    String? title,
+    String? summary,
+    DateTime? startAt,
+    DateTime? endAt,
+    String? location,
+    String? topic,
+    DateTime? reminderAt,
+    String? status,
+    int? durationMinutes,
+    bool clearLocation = false,
+    bool clearTopic = false,
+    bool clearReminderAt = false,
+  }) {
+    return TodoPayload(
+      title: title ?? this.title,
+      summary: summary ?? this.summary,
+      startAt: startAt ?? this.startAt,
+      endAt: endAt ?? this.endAt,
+      location: clearLocation ? null : (location ?? this.location),
+      topic: clearTopic ? null : (topic ?? this.topic),
+      reminderAt:
+          clearReminderAt ? null : (reminderAt ?? this.reminderAt),
+      status: status ?? this.status,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+    );
+  }
 
   factory TodoPayload.fromJson(Map<String, dynamic> json) {
     return TodoPayload(
@@ -38,19 +77,21 @@ class TodoPayload {
       topic: json['topic'] as String?,
       reminderAt: _parseDate(json['reminder_at']),
       status: json['status'] as String? ?? 'draft',
+      durationMinutes: json['duration_minutes'] as int?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'title': title,
-      'summary': summary,
+      if (title != null) 'title': title,
+      if (summary != null) 'summary': summary,
       'start_at': startAt?.toIso8601String(),
       'end_at': endAt?.toIso8601String(),
       'location': location,
       'topic': topic,
       'reminder_at': reminderAt?.toIso8601String(),
       'status': status,
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
     };
   }
 }
@@ -135,6 +176,42 @@ class TodoDeletePayload {
   }
 }
 
+class TodoQueryPayload {
+  const TodoQueryPayload({
+    this.dateFrom,
+    this.dateTo,
+    this.keyword,
+    this.includeCompleted = false,
+    this.importanceRequested = false,
+  });
+
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+  final String? keyword;
+  final bool includeCompleted;
+  final bool importanceRequested;
+
+  factory TodoQueryPayload.fromJson(Map<String, dynamic> json) {
+    return TodoQueryPayload(
+      dateFrom: _parseDate(json['date_from']),
+      dateTo: _parseDate(json['date_to']),
+      keyword: json['keyword'] as String?,
+      includeCompleted: json['include_completed'] as bool? ?? false,
+      importanceRequested: json['importance_requested'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'date_from': dateFrom?.toIso8601String(),
+      'date_to': dateTo?.toIso8601String(),
+      'keyword': keyword,
+      'include_completed': includeCompleted,
+      'importance_requested': importanceRequested,
+    };
+  }
+}
+
 class CaptureResult {
   const CaptureResult({
     required this.intentType,
@@ -148,6 +225,9 @@ class CaptureResult {
     required this.ideaPayload,
     this.todoPayloads = const [],
     this.todoDeletePayload,
+    this.todoQueryPayload,
+    this.interactionMode,
+    this.updatedFields = const [],
   });
 
   final CaptureIntentType intentType;
@@ -161,6 +241,9 @@ class CaptureResult {
   final List<TodoPayload> todoPayloads;
   final IdeaPayload? ideaPayload;
   final TodoDeletePayload? todoDeletePayload;
+  final TodoQueryPayload? todoQueryPayload;
+  final InteractionMode? interactionMode;
+  final List<String> updatedFields;
 
   List<TodoPayload> get effectiveTodoPayloads {
     if (todoPayloads.isNotEmpty) {
@@ -199,6 +282,16 @@ class CaptureResult {
           ? TodoDeletePayload.fromJson(
               json['todo_delete_payload'] as Map<String, dynamic>)
           : null,
+      todoQueryPayload: json['todo_query_payload'] is Map<String, dynamic>
+          ? TodoQueryPayload.fromJson(
+              json['todo_query_payload'] as Map<String, dynamic>)
+          : null,
+      interactionMode: json['interaction_mode'] is String
+          ? interactionModeFromJson(json['interaction_mode'] as String)
+          : null,
+      updatedFields: (json['updated_fields'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
     );
   }
 
@@ -216,6 +309,10 @@ class CaptureResult {
           todoPayloads.map((todo) => todo.toJson()).toList(growable: false),
       'idea_payload': ideaPayload?.toJson(),
       'todo_delete_payload': todoDeletePayload?.toJson(),
+      'todo_query_payload': todoQueryPayload?.toJson(),
+      if (interactionMode != null)
+        'interaction_mode': interactionMode!.name,
+      'updated_fields': updatedFields,
     };
   }
 }

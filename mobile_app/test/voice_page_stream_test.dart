@@ -443,6 +443,40 @@ class _FakeCaptureConversationAgent implements CaptureConversationAgent {
 
   @override
   void reset() {}
+
+  @override
+  Future<void> cancelDraft() async {}
+
+  @override
+  Future<void> completeDraft() async {}
+
+  @override
+  Future<void> clearMemory() async {}
+
+  @override
+  Future<bool> restoreSession() async => false;
+
+  @override
+  CaptureSessionState get state => CaptureSessionState.idle;
+
+  @override
+  CaptureResult? get draft => null;
+
+  @override
+  String get sessionId => 'test';
+
+  @override
+  List<Map<String, String>> get memory => [];
+
+  @override
+  ConversationSnapshot get displaySnapshot =>
+      const ConversationSnapshot(messages: [], activeDraft: null, state: CaptureSessionState.idle);
+
+  @override
+  void appendDisplayMessage(ConversationMessage message) {}
+
+  @override
+  void updateLastDisplayMessage(String text) {}
 }
 
 class _FakeSpeechService implements VolcengineSpeechService {

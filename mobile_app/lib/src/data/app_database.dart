@@ -5,7 +5,8 @@ import '../domain/capture_models.dart';
 import '../domain/conflict_detector.dart';
 import 'entry_dao.dart';
 
-export 'entry_dao.dart' show EntryListItem, IdeaPage, IdeaPageCursor;
+export 'entry_dao.dart'
+    show EntryListItem, IdeaPage, IdeaPageCursor, CaptureSessionRow;
 
 part 'tables.dart';
 part 'app_database.g.dart';
@@ -25,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +41,15 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await _createPagingIndexes();
+          }
+          if (from < 3) {
+            await m.addColumn(
+                captureSessions, captureSessions.conversationJson);
+            await m.addColumn(
+                captureSessions, captureSessions.activeDraftJson);
+            await m.addColumn(
+                captureSessions, captureSessions.recoverableDraftJson);
+            await m.addColumn(captureSessions, captureSessions.expiresAt);
           }
         },
       );
@@ -67,6 +77,10 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<EntryListItem>> loadTodos(DateTime from, DateTime to) {
     return entryDao.loadTodos(from, to);
+  }
+
+  Future<List<EntryListItem>> queryTodos(TodoQueryPayload payload) {
+    return entryDao.queryTodos(payload);
   }
 
   Future<List<EntryListItem>> searchIdeas(String query) {
@@ -107,6 +121,42 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearAll() {
     return entryDao.clearAll();
+  }
+
+  Future<void> upsertSession({
+    required String id,
+    required String rawText,
+    required String status,
+    required String createdAt,
+    required String updatedAt,
+    String? conversationJson,
+    String? activeDraftJson,
+    String? recoverableDraftJson,
+    String? expiresAt,
+  }) {
+    return entryDao.upsertSession(
+      id: id,
+      rawText: rawText,
+      status: status,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      conversationJson: conversationJson,
+      activeDraftJson: activeDraftJson,
+      recoverableDraftJson: recoverableDraftJson,
+      expiresAt: expiresAt,
+    );
+  }
+
+  Future<CaptureSessionRow?> loadSession(String id) {
+    return entryDao.loadSession(id);
+  }
+
+  Future<CaptureSessionRow?> loadLatestRecoverableSession() {
+    return entryDao.loadLatestRecoverableSession();
+  }
+
+  Future<void> deleteSession(String id) {
+    return entryDao.deleteSession(id);
   }
 
   Future<bool> entryFtsUsesFts5() async {
