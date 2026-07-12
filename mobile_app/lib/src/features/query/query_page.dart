@@ -256,6 +256,16 @@ class _TodoListState extends ConsumerState<_TodoList> {
       if (index >= 0) {
         _todos[index] = _copyTodoWithStatus(todo, nextStatus);
       }
+      final unscheduledIndex =
+          _unscheduledTodos.indexWhere((item) => item.id == todo.id);
+      if (unscheduledIndex >= 0) {
+        if (nextStatus == 'completed') {
+          _unscheduledTodos.removeAt(unscheduledIndex);
+        } else {
+          _unscheduledTodos[unscheduledIndex] =
+              _copyTodoWithStatus(todo, nextStatus);
+        }
+      }
     });
   }
 
@@ -291,6 +301,17 @@ class _TodoListState extends ConsumerState<_TodoList> {
           }
           final row = rows[index];
           return switch (row) {
+            _TodoUnscheduledHeaderRow() => Padding(
+                key: const Key('todo-unscheduled-header'),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text(
+                  '待安排',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
             _TodoDayHeaderRow(:final day) => Padding(
                 key: Key(
                     'todo-day-${_relativeDayKey(day, _dateOnly(DateTime.now()))}-header'),
@@ -734,6 +755,10 @@ class _TodoDayHeaderRow extends _TodoListRow {
   final DateTime day;
 }
 
+class _TodoUnscheduledHeaderRow extends _TodoListRow {
+  const _TodoUnscheduledHeaderRow();
+}
+
 class _TodoItemRow extends _TodoListRow {
   const _TodoItemRow(this.todo);
 
@@ -744,7 +769,10 @@ class _TodoEmptyTodayRow extends _TodoListRow {
   const _TodoEmptyTodayRow();
 }
 
-List<_TodoListRow> _todoRows(List<EntryListItem> todos) {
+List<_TodoListRow> _todoRows(
+  List<EntryListItem> todos, {
+  List<EntryListItem> unscheduled = const [],
+}) {
   final today = _dateOnly(DateTime.now());
   final grouped = <DateTime, List<EntryListItem>>{};
   for (final todo in todos) {
@@ -756,6 +784,10 @@ List<_TodoListRow> _todoRows(List<EntryListItem> todos) {
   final days = grouped.keys.toList()..sort();
 
   return [
+    if (unscheduled.isNotEmpty) ...[
+      const _TodoUnscheduledHeaderRow(),
+      for (final todo in unscheduled) _TodoItemRow(todo),
+    ],
     for (final day in days) ...[
       _TodoDayHeaderRow(day),
       if (grouped[day]!.isEmpty)

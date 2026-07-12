@@ -38,7 +38,8 @@ class ArkResponsesAgentClient implements AgentModelClient {
       },
       body: jsonEncode({
         'model': await _model(),
-        'instructions': '$_agentInstructions\n$_toolEvidenceInstructions',
+        'instructions':
+            '$_agentInstructions\n$_toolEvidenceInstructions\n${_currentDateInstruction()}',
         'input': request.input.map((item) => item.json).toList(),
         'tools': request.tools
             .map((definition) => definition.toResponsesJson())
@@ -107,3 +108,12 @@ before answering. Do not claim that an action succeeded, or that records were
 found, until a tool result confirms it. If no tool result is available, call a
 tool or ask a clarification question instead.
 ''';
+
+String _currentDateInstruction() {
+  final now = DateTime.now();
+  final date = '${now.year.toString().padLeft(4, '0')}-'
+      '${now.month.toString().padLeft(2, '0')}-'
+      '${now.day.toString().padLeft(2, '0')}';
+  return 'Current local date is $date. Resolve relative dates such as '
+      '"tomorrow" into ISO-8601 start_at values when creating todos.';
+}

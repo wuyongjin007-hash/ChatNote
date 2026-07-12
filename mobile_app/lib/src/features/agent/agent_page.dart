@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -211,58 +212,65 @@ class _AgentPageState extends ConsumerState<AgentPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Column(
-        children: [
-          const PageHeader(title: '智能记录'),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _messages.isEmpty
-                ? const _AgentEmptyState()
-                : ListView.builder(
-                    controller: _scrollController,
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) =>
-                        _MessageBubble(message: _messages[index]),
-                  ),
-          ),
-          if (_pending != null)
-            _ConfirmationCard(
-              pending: _pending!,
-              onConfirm: _confirm,
-              onCancel: _cancel,
-            ),
-          if (_status != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_status!, style: const TextStyle(color: Colors.black54)),
-                ],
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Column(
+            children: [
+              const PageHeader(title: '智能记录'),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _messages.isEmpty
+                    ? const _AgentEmptyState()
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) =>
+                            _MessageBubble(message: _messages[index]),
+                      ),
               ),
-            ),
-          UnifiedInputBar(
-            controller: _textController,
-            enabled: (!_busy && _pending == null) || _recording,
-            isTextMode: _textInputMode,
-            hasText: _textController.text.trim().isNotEmpty,
-            onSubmitText: _send,
-            onToggleMode: () => setState(() {
-              _textInputMode = !_textInputMode;
-            }),
-            onLongPressStart: _startVoice,
-            onLongPressMoveUpdate: _updateVoiceDrag,
-            onLongPressEnd: _stopVoice,
+              if (_pending != null)
+                _ConfirmationCard(
+                  pending: _pending!,
+                  onConfirm: _confirm,
+                  onCancel: _cancel,
+                ),
+              if (_status != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_status!,
+                          style: const TextStyle(color: Colors.black54)),
+                    ],
+                  ),
+                ),
+              UnifiedInputBar(
+                controller: _textController,
+                enabled: (!_busy && _pending == null) || _recording,
+                isTextMode: _textInputMode,
+                hasText: _textController.text.trim().isNotEmpty,
+                onSubmitText: _send,
+                onToggleMode: () => setState(() {
+                  _textInputMode = !_textInputMode;
+                }),
+                onLongPressStart: _startVoice,
+                onLongPressMoveUpdate: _updateVoiceDrag,
+                onLongPressEnd: _stopVoice,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        if (_recording)
+          _RecordingOverlay(willCancel: _recordingWillCancel),
+      ],
     );
   }
 }
@@ -351,6 +359,134 @@ class _VisibleMessage {
   const _VisibleMessage({required this.isUser, required this.text});
   final bool isUser;
   final String text;
+}
+
+class _RecordingOverlay extends StatelessWidget {
+  const _RecordingOverlay({required this.willCancel});
+
+  final bool willCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    return Positioned.fill(
+      key: const Key('voice-recording-overlay'),
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            height: 330 + bottomPadding,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0),
+                  const Color(0xffdff5ff).withValues(alpha: 0.72),
+                  const Color(0xff0b8cff).withValues(alpha: 0.96),
+                ],
+              ),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 66, 24, 22 + bottomPadding),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    height: 74,
+                    width: 74,
+                    decoration: BoxDecoration(
+                      color: willCancel ? Colors.white : const Color(0xff087cff),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (willCancel ? Colors.redAccent : Colors.white)
+                              .withValues(alpha: 0.42),
+                          blurRadius: 28,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      willCancel ? Icons.close : Icons.mic,
+                      color: willCancel ? Colors.redAccent : Colors.white,
+                      size: 34,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    willCancel ? '松手取消' : '松手发送，上移取消',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 22),
+                  const _AnimatedWaveform(color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedWaveform extends StatefulWidget {
+  const _AnimatedWaveform({required this.color});
+
+  final Color color;
+
+  @override
+  State<_AnimatedWaveform> createState() => _AnimatedWaveformState();
+}
+
+class _AnimatedWaveformState extends State<_AnimatedWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _waveController;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _waveController,
+      builder: (context, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: List.generate(42, (index) {
+            final wave = math.sin(
+                (_waveController.value * math.pi * 2) + index * 0.42);
+            final height = 8 + (wave.abs() * 22) + (index % 5 == 0 ? 8 : 0);
+            return Container(
+              width: 3,
+              height: height,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: 0.78),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
 }
 
 String _friendlyStatus(String raw) {

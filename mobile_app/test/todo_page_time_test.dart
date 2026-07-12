@@ -92,15 +92,15 @@ void main() {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     await database.saveTodo(
-      capture: CaptureResult(
+      capture: const CaptureResult(
         intentType: CaptureIntentType.todo,
         confidence: 1,
         title: 'Unscheduled swim',
         summary: 'Unscheduled swim',
-        missingFields: const [],
+        missingFields: [],
         followUpQuestion: null,
         shouldSave: true,
-        todoPayload: const TodoPayload(
+        todoPayload: TodoPayload(
           startAt: null,
           endAt: null,
           location: null,
