@@ -87,6 +87,44 @@ void main() {
     expect(find.text('Yesterday todo'), findsNothing);
   });
 
+  testWidgets('shows unscheduled todos in the pending arrangement section',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await database.saveTodo(
+      capture: CaptureResult(
+        intentType: CaptureIntentType.todo,
+        confidence: 1,
+        title: 'Unscheduled swim',
+        summary: 'Unscheduled swim',
+        missingFields: const [],
+        followUpQuestion: null,
+        shouldSave: true,
+        todoPayload: const TodoPayload(
+          startAt: null,
+          endAt: null,
+          location: null,
+          topic: null,
+          reminderAt: null,
+          status: 'pending',
+        ),
+        ideaPayload: null,
+      ),
+      rawText: 'swim someday',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: TodoQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('待安排'), findsOneWidget);
+    expect(find.text('Unscheduled swim'), findsOneWidget);
+  });
+
   testWidgets('renders todos as compact checklist cards', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

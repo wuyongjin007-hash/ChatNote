@@ -130,7 +130,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Budget meeting'), findsOneWidget);
-    expect(find.text('缺少信息：location'), findsOneWidget);
+    expect(find.text('缺少信息：地点'), findsOneWidget);
 
     final draftCard = tester.widget<Container>(
       find.byKey(const Key('voice-draft-card')),
@@ -279,7 +279,7 @@ void main() {
 
     expect(find.text('时间冲突'), findsOneWidget);
     expect(find.text('保留原日程'), findsOneWidget);
-    expect(find.text('删除原日程并保存本次'), findsOneWidget);
+    expect(find.text('删除原日程'), findsOneWidget);
     expect(find.text('取消'), findsNothing);
     expect(find.text('保存'), findsNothing);
   });
@@ -315,7 +315,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('准备删除 1 条待办'), findsOneWidget);
-    expect(find.textContaining('08:00 Existing todo'), findsOneWidget);
+    expect(find.text('08:00'), findsOneWidget);
+    expect(find.text('Existing todo'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('确认删除'), findsOneWidget);
 
@@ -581,17 +582,17 @@ class _QueryThenDeleteCaptureConversationAgent
 
     yield CaptureAgentTurnDone(
       CaptureTurn(
-        capture: CaptureResult(
+        capture: const CaptureResult(
           intentType: CaptureIntentType.todoDelete,
           confidence: 0.98,
           title: '删除这些待办',
           summary: '删除查询结果',
-          missingFields: const [],
+          missingFields: [],
           followUpQuestion: null,
           shouldSave: false,
           todoPayload: null,
           ideaPayload: null,
-          todoDeletePayload: const TodoDeletePayload(
+          todoDeletePayload: TodoDeletePayload(
             operation: TodoDeleteOperation.clear,
             dateFrom: null,
             dateTo: null,

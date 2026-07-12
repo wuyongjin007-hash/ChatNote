@@ -267,6 +267,21 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     return rows.map(_todoFromRow).toList(growable: false);
   }
 
+  Future<List<EntryListItem>> loadUnscheduledTodos() async {
+    final rows = await db.customSelect(
+      '''
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
+      FROM entries e
+      JOIN todos t ON t.entry_id = e.id
+      WHERE t.start_at IS NULL
+        AND (t.status IS NULL OR t.status != 'completed')
+      ORDER BY e.created_at DESC
+      ''',
+      readsFrom: {entries, todos},
+    ).get();
+    return rows.map(_todoFromRow).toList(growable: false);
+  }
+
   Future<List<EntryListItem>> queryTodos(TodoQueryPayload payload) async {
     final conditions = <String>['t.start_at IS NOT NULL'];
     final vars = <Variable>[];

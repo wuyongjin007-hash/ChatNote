@@ -1,6 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'ai/volcengine_ark_capture_client.dart';
+import 'ai/ark_responses_agent_client.dart';
+import 'agent/agent_runtime.dart';
+import 'agent/agent_session_controller.dart';
+import 'agent/agent_tool.dart';
+import 'agent/local_agent_tools.dart';
 import 'audio/interaction_sound_service.dart';
 import 'data/app_database.dart';
 import 'data/entry_repository.dart';
@@ -84,4 +89,32 @@ final interactionSoundServiceProvider =
   final service = LocalInteractionSoundService();
   ref.onDispose(service.dispose);
   return service;
+});
+
+final agentToolRegistryProvider = Provider<AgentToolRegistry>((ref) {
+  return AgentToolRegistry(buildLocalAgentTools(ref.watch(databaseProvider)));
+});
+
+final agentModelClientProvider = Provider<ArkResponsesAgentClient>((ref) {
+  final settings = ref.watch(settingsStoreProvider);
+  return ArkResponsesAgentClient(
+    apiKey: () async => await settings.volcengineArkApiKey() ?? '',
+    baseUrl: settings.volcengineArkBaseUrl,
+    model: settings.volcengineArkTextModel,
+  );
+});
+
+final agentRuntimeProvider = Provider<AgentRuntime>((ref) {
+  return AgentRuntime(
+    modelClient: ref.watch(agentModelClientProvider),
+    tools: ref.watch(agentToolRegistryProvider),
+  );
+});
+
+final agentSessionControllerProvider = Provider<AgentSessionController>((ref) {
+  return AgentSessionController(
+    database: ref.watch(databaseProvider),
+    runtime: ref.watch(agentRuntimeProvider),
+    threadId: 'default-agent-thread',
+  );
 });

@@ -108,6 +108,7 @@ class _TodoListState extends ConsumerState<_TodoList> {
 
   final _scrollController = ScrollController();
   final _todos = <EntryListItem>[];
+  final _unscheduledTodos = <EntryListItem>[];
   late DateTime _from;
   late DateTime _to;
   var _isInitialLoading = true;
@@ -134,8 +135,13 @@ class _TodoListState extends ConsumerState<_TodoList> {
   }
 
   Future<void> _loadInitial() async {
-    final items =
-        await ref.read(entryRepositoryProvider).loadTodoWindow(_from, _to);
+    final repository = ref.read(entryRepositoryProvider);
+    final results = await Future.wait([
+      repository.loadTodoWindow(_from, _to),
+      repository.loadUnscheduledTodos(),
+    ]);
+    final items = results[0];
+    final unscheduled = results[1];
     if (!mounted) {
       return;
     }
@@ -143,6 +149,9 @@ class _TodoListState extends ConsumerState<_TodoList> {
       _todos
         ..clear()
         ..addAll(items);
+      _unscheduledTodos
+        ..clear()
+        ..addAll(unscheduled);
       _sortTodos();
       _isInitialLoading = false;
       _initialWindowCount = 1;
@@ -255,7 +264,7 @@ class _TodoListState extends ConsumerState<_TodoList> {
     if (_isInitialLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final rows = _todoRows(_todos);
+    final rows = _todoRows(_todos, unscheduled: _unscheduledTodos);
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is OverscrollNotification &&

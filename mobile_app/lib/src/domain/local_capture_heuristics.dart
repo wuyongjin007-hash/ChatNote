@@ -3,12 +3,6 @@ import 'capture_models.dart';
 class LocalCaptureHeuristics {
   CaptureResult extract(String text) {
     final normalized = text.trim();
-    if (_looksLikeTodoQuery(normalized)) {
-      return _todoQueryResult(normalized);
-    }
-    if (_looksLikeTodoDelete(normalized)) {
-      return _todoDeleteResult(normalized);
-    }
     if (_looksLikeWanliIdea(normalized)) {
       return const CaptureResult(
         intentType: CaptureIntentType.idea,
@@ -26,11 +20,17 @@ class LocalCaptureHeuristics {
         ),
       );
     }
-
+    if (_looksLikeTodoQuery(normalized)) {
+      return _todoQueryResult(normalized);
+    }
+    if (_looksLikeTodoDelete(normalized)) {
+      return _todoDeleteResult(normalized);
+    }
     if (_looksLikeTodo(normalized)) {
       final now = DateTime.now();
       final startAt = _extractTime(normalized, now);
-      final defaultDuration = normalized.contains('会议') || normalized.contains('开会') ? 60 : 30;
+      final defaultDuration =
+          normalized.contains('会议') || normalized.contains('开会') ? 60 : 30;
       final endAt = startAt?.add(Duration(minutes: defaultDuration));
 
       return CaptureResult(
@@ -39,9 +39,8 @@ class LocalCaptureHeuristics {
         title: _titleForTodo(normalized),
         summary: normalized,
         missingFields: startAt == null ? const ['start_at'] : const [],
-        followUpQuestion: startAt == null
-            ? '请问这件事安排在什么时间？'
-            : '已整理好这条待办，还需要补充其他信息吗？',
+        followUpQuestion:
+            startAt == null ? '请问这件事安排在什么时间？' : '已整理好这条待办，还需要补充其他信息吗？',
         shouldSave: startAt != null,
         todoPayload: TodoPayload(
           title: _titleForTodo(normalized),
@@ -78,7 +77,8 @@ class LocalCaptureHeuristics {
     final todoObjects = ['待办', '提醒', '日程', '事情', '安排', '事项'];
     final hasQueryVerb = queryVerbs.any((verb) => text.contains(verb));
     final hasTodoObject = todoObjects.any((obj) => text.contains(obj));
-    final isQuestion = text.contains('吗') || text.contains('？') || text.contains('?');
+    final isQuestion =
+        text.contains('吗') || text.contains('？') || text.contains('?');
     return (hasQueryVerb && hasTodoObject) || (hasTodoObject && isQuestion);
   }
 

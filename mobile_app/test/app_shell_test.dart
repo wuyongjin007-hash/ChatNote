@@ -68,6 +68,7 @@ void main() {
     expect(find.text('想法'), findsOneWidget);
     expect(find.text('查询'), findsNothing);
     expect(find.byKey(const Key('drawer-destination-settings')), findsNothing);
+    expect(find.byKey(const Key('drawer-destination-ledger')), findsOneWidget);
     expect(find.byKey(const Key('drawer-destination-voice-selected')),
         findsOneWidget);
 

@@ -11,6 +11,7 @@ import '../../domain/conflict_detector.dart';
 import '../../providers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/page_header.dart';
+import '../../widgets/unified_input_bar.dart';
 
 class VoicePage extends ConsumerStatefulWidget {
   const VoicePage({super.key});
@@ -45,6 +46,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     super.initState();
     _textController.addListener(_refreshTextInput);
     _restoreDisplayFromAgent();
+    Future<void>.microtask(_tryRestoreSession);
   }
 
   void _restoreDisplayFromAgent() {
@@ -537,14 +539,14 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       if (diff == 1) {
         final month = payload.dateFrom!.month;
         final day = payload.dateFrom!.day;
-        return '${month}月${day}日的待办：';
+        return '$month月$day日的待办：';
       }
       if (diff <= 7) {
         final fromMonth = payload.dateFrom!.month;
         final fromDay = payload.dateFrom!.day;
         final toMonth = payload.dateTo!.month;
         final toDay = payload.dateTo!.day;
-        return '${fromMonth}月${fromDay}日 至 ${toMonth}月${toDay}日的待办：';
+        return '$fromMonth月$fromDay日 至 $toMonth月$toDay日的待办：';
       }
     }
     return '查询结果：';
@@ -563,7 +565,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         final gap = next.startAt!.difference(current.endAt!).inMinutes;
         if (gap < 30 && gap >= 0) {
           suggestions.add(
-              '「${current.title}」和「${next.title}」间隔较短（${gap}分钟），建议提前安排出行时间。');
+              '「${current.title}」和「${next.title}」间隔较短（$gap分钟），建议提前安排出行时间。');
         } else if (gap < 0) {
           suggestions.add('「${current.title}」与「${next.title}」时间重叠，请注意调整。');
         }
@@ -580,7 +582,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       if (todo.endAt != null && todo.startAt != null) {
         final duration = todo.endAt!.difference(todo.startAt!).inMinutes;
         if (duration > 120) {
-          suggestions.add('「${todo.title}」持续时间较长（${duration}分钟）。');
+          suggestions.add('「${todo.title}」持续时间较长（$duration分钟）。');
         }
       }
     }
@@ -646,7 +648,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
               ),
               if (_aiBusy) const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 8),
-              _UnifiedInputBar(
+              UnifiedInputBar(
                 controller: _textController,
                 enabled:
                     !_isInputLocked || _voiceStage == _VoiceStage.recording,

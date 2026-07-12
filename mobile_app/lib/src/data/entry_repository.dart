@@ -74,6 +74,10 @@ class EntryRepository {
     return _database.loadTodos(from, to);
   }
 
+  Future<List<EntryListItem>> loadUnscheduledTodos() {
+    return _database.loadUnscheduledTodos();
+  }
+
   Future<List<EntryListItem>> searchIdeas(String query) {
     return _database.searchIdeas(query);
   }

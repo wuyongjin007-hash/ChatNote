@@ -360,7 +360,7 @@ class CaptureConversationAgent {
       return false;
     }
 
-    final row = await _repository!.loadLatestRecoverableSession();
+    final row = await _repository.loadLatestRecoverableSession();
     if (row == null || !row.isRecoverable) {
       return false;
     }
@@ -382,7 +382,7 @@ class CaptureConversationAgent {
       ..add(row.rawText);
     _state = CaptureSessionState.collecting;
 
-    await _repository!.deleteSession(row.id);
+    await _repository.deleteSession(row.id);
     return true;
   }
 
@@ -403,7 +403,7 @@ class CaptureConversationAgent {
     _lastQueryTodoIds.clear();
     _state = CaptureSessionState.idle;
     if (_repository != null) {
-      await _repository!.deleteSession(_sessionId);
+      await _repository.deleteSession(_sessionId);
     }
     _sessionId = _newSessionId();
   }
@@ -482,7 +482,7 @@ class CaptureConversationAgent {
     }
     final now = DateTime.now().toIso8601String();
     try {
-      await _repository!.upsertSession(
+      await _repository.upsertSession(
         id: _sessionId,
         rawText: _rawInputs.join('\n'),
         status: status,

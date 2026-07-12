@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/query/query_page.dart';
+import 'features/ledger/ledger_page.dart';
+import 'features/agent/agent_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/voice/voice_page.dart';
 import 'theme/app_colors.dart';
@@ -55,6 +57,13 @@ final _router = GoRouter(
       builder: (context, state, child) => _AppShell(child: child),
       routes: [
         GoRoute(
+          path: '/agent',
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const AgentPage(),
+          ),
+        ),
+        GoRoute(
           path: '/voice',
           pageBuilder: (context, state) => NoTransitionPage<void>(
             key: state.pageKey,
@@ -77,6 +86,13 @@ final _router = GoRouter(
           pageBuilder: (context, state) => NoTransitionPage<void>(
             key: state.pageKey,
             child: const IdeaQueryPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/ledger',
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const LedgerPage(),
           ),
         ),
         GoRoute(
@@ -276,6 +292,15 @@ class _AppDrawer extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               _DrawerDestinationTile(
+                id: 'agent',
+                icon: Icons.auto_awesome_outlined,
+                selectedIcon: Icons.auto_awesome,
+                label: '智能记录',
+                path: '/agent',
+                selected: currentLocation == '/agent',
+                onNavigate: onNavigate,
+              ),
+              _DrawerDestinationTile(
                 id: 'voice',
                 icon: Icons.mic_none,
                 selectedIcon: Icons.mic,
@@ -300,6 +325,15 @@ class _AppDrawer extends StatelessWidget {
                 label: '想法',
                 path: '/ideas',
                 selected: currentLocation == '/ideas',
+                onNavigate: onNavigate,
+              ),
+              _DrawerDestinationTile(
+                id: 'ledger',
+                icon: Icons.account_balance_wallet_outlined,
+                selectedIcon: Icons.account_balance_wallet,
+                label: '记账',
+                path: '/ledger',
+                selected: currentLocation == '/ledger',
                 onNavigate: onNavigate,
               ),
               const Spacer(),

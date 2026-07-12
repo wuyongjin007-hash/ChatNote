@@ -3,13 +3,15 @@ import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/domain/local_capture_heuristics.dart';
 
 void main() {
-  test('asks for missing meeting fields', () {
+  test('uses the default morning time while keeping optional fields empty', () {
     final result = LocalCaptureHeuristics().extract('我明天早晨要开个会，帮我记录一下');
 
     expect(result.intentType, CaptureIntentType.todo);
-    expect(
-        result.missingFields, containsAll(['start_at', 'location', 'topic']));
-    expect(result.shouldSave, isFalse);
+    expect(result.missingFields, isEmpty);
+    expect(result.missingFields, isNot(contains('location')));
+    expect(result.missingFields, isNot(contains('topic')));
+    expect(result.todoPayload?.startAt?.hour, 8);
+    expect(result.shouldSave, isTrue);
   });
 
   test('classifies the Wanli example as an idea', () {
