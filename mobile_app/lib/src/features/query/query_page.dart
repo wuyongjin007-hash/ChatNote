@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
@@ -152,6 +153,7 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
   late Future<List<EntryListItem>> _ideas;
   final _deletingIdeaIds = <String>{};
   final _hiddenIdeaIds = <String>{};
+  OverlayEntry? _copyOverlay;
 
   @override
   void initState() {
@@ -186,6 +188,42 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
       _deletingIdeaIds.remove(id);
       _hiddenIdeaIds.add(id);
     });
+  }
+
+  void _showCopyOverlay(EntryListItem idea, Offset globalPosition) {
+    _dismissCopyOverlay();
+    _copyOverlay = OverlayEntry(
+      builder: (_) => GestureDetector(
+        onTap: _dismissCopyOverlay,
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: ColoredBox(color: Colors.transparent),
+            ),
+            Positioned(
+              left: globalPosition.dx - 28,
+              top: globalPosition.dy - 40,
+              child: _CopyButton(
+                onTap: () {
+                  _dismissCopyOverlay();
+                  Clipboard.setData(ClipboardData(
+                    text:
+                        '${idea.title}\n${idea.summary ?? idea.normalizedText}',
+                  ));
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_copyOverlay!);
+  }
+
+  void _dismissCopyOverlay() {
+    _copyOverlay?.remove();
+    _copyOverlay = null;
   }
 
   @override
@@ -238,81 +276,87 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
                     ),
                   ],
                 ),
-                child: Container(
-                  key: const Key('idea-card'),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.035),
-                        blurRadius: 12,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  idea.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.2,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  idea.summary ?? idea.normalizedText,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        height: 1.35,
-                                      ),
-                                ),
-                                if (idea.tags.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 9),
-                                    child: Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: [
-                                        for (final tag in idea.tags)
-                                          _IdeaTagPill(tag: tag),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.accentLine,
-                            borderRadius: BorderRadius.horizontal(
-                              right: Radius.circular(8),
-                            ),
-                          ),
+                child: GestureDetector(
+                  onLongPressStart: (details) =>
+                      _showCopyOverlay(idea, details.globalPosition),
+                  child: Container(
+                    key: const Key('idea-card'),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.035),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
                         ),
                       ],
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 13, 12, 13),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    idea.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.2,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    idea.summary ?? idea.normalizedText,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                  if (idea.tags.isNotEmpty)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(top: 9),
+                                      child: Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          for (final tag in idea.tags)
+                                            _IdeaTagPill(tag: tag),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 4,
+                            decoration: const BoxDecoration(
+                              color: AppColors.accentLine,
+                              borderRadius: BorderRadius.horizontal(
+                                right: Radius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -617,4 +661,34 @@ String _todoDetail(EntryListItem todo) {
     if ((todo.location ?? '').isNotEmpty) todo.location!,
   ];
   return parts.join('  ');
+}
+
+class _CopyButton extends StatelessWidget {
+  const _CopyButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Text(
+            '复制',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
 }

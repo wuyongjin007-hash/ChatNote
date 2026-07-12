@@ -83,6 +83,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       return;
     }
 
+    unawaited(ref.read(interactionSoundServiceProvider).playXiu());
+
     late final int recognizingIndex;
     setState(() {
       _voiceStage = _VoiceStage.recognizing;
@@ -104,7 +106,6 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _replaceMessage(recognizingIndex, _ChatMessage.user(normalized));
       _removeAssistantTyping();
       setState(() => _voiceStage = _VoiceStage.recognized);
-      unawaited(ref.read(interactionSoundServiceProvider).playXiu());
       await _submitText(normalized, addUserMessage: false);
     } catch (error) {
       _replaceMessage(recognizingIndex, const _ChatMessage.user('语音识别失败'));
@@ -463,7 +464,7 @@ class _VoiceAssistantPrompt extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  '试着说出你的想法，我会帮你整理和保存。',
+                  '说出你的想法，我会帮你整理和保存。',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 15,
@@ -831,6 +832,7 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           IconButton(
             onPressed: widget.enabled ? () {} : null,
@@ -850,6 +852,7 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
                   ? TextField(
                       key: const Key('merged-text-input'),
                       controller: widget.controller,
+                      textAlignVertical: TextAlignVertical.center,
                       minLines: 1,
                       maxLines: 2,
                       enabled: widget.enabled,
@@ -860,6 +863,9 @@ class _UnifiedInputBarState extends State<_UnifiedInputBar> {
                         hintText: '发送消息或按住说话...',
                         isDense: true,
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
                         suffixIconConstraints: const BoxConstraints(
                           minWidth: 36,
                           minHeight: 36,
