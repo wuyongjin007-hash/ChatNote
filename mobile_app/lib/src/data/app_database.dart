@@ -5,7 +5,7 @@ import '../domain/capture_models.dart';
 import '../domain/conflict_detector.dart';
 import 'entry_dao.dart';
 
-export 'entry_dao.dart' show EntryListItem;
+export 'entry_dao.dart' show EntryListItem, IdeaPage, IdeaPageCursor;
 
 part 'tables.dart';
 part 'app_database.g.dart';
@@ -25,7 +25,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -35,6 +35,12 @@ class AppDatabase extends _$AppDatabase {
         onCreate: (m) async {
           await m.createAll();
           await _createEntryFtsTable();
+          await _createPagingIndexes();
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await _createPagingIndexes();
+          }
         },
       );
 
@@ -65,6 +71,18 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<EntryListItem>> searchIdeas(String query) {
     return entryDao.searchIdeas(query);
+  }
+
+  Future<IdeaPage> loadIdeaPage({
+    String query = '',
+    IdeaPageCursor? after,
+    int limit = 40,
+  }) {
+    return entryDao.loadIdeaPage(
+      query: query,
+      after: after,
+      limit: limit,
+    );
   }
 
   Future<List<TodoTimeBlock>> loadTodoBlocks() {
@@ -120,6 +138,18 @@ class AppDatabase extends _$AppDatabase {
         );
       ''');
     }
+  }
+
+  Future<void> _createPagingIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_todos_start_at ON todos(start_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_type_updated_id ON entries(type, updated_at DESC, id DESC)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entry_tags_entry_id ON entry_tags(entry_id)',
+    );
   }
 }
 

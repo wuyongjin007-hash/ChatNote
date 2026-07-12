@@ -41,6 +41,25 @@ class EntryListItem {
   final String status;
 }
 
+class IdeaPageCursor {
+  const IdeaPageCursor({required this.updatedAt, required this.id});
+
+  final String updatedAt;
+  final String id;
+}
+
+class IdeaPage {
+  const IdeaPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<EntryListItem> items;
+  final IdeaPageCursor? nextCursor;
+  final bool hasMore;
+}
+
 @DriftAccessor(tables: [Entries, Todos, Ideas, Tags, EntryTags])
 class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   EntryDao(super.db);
@@ -175,24 +194,35 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   }
 
   Future<List<EntryListItem>> searchIdeas(String query) async {
-    final trimmed = query.trim();
-    final rows = trimmed.isEmpty
-        ? await db.customSelect(
-            '''
-            SELECT e.*, i.summary, i.source_hint
-            FROM entries e
-            JOIN ideas i ON i.entry_id = e.id
-            ORDER BY e.updated_at DESC
-            ''',
-            readsFrom: {entries, ideas},
-          ).get()
-        : await _searchIdeasByText(trimmed);
+    final rows = await _loadIdeaRows(query: query);
+    return _ideasFromRows(rows);
+  }
 
-    final items = <EntryListItem>[];
-    for (final row in rows) {
-      items.add(_ideaFromRow(row, await _tagsForEntry(row.read<String>('id'))));
-    }
-    return items;
+  Future<IdeaPage> loadIdeaPage({
+    required String query,
+    IdeaPageCursor? after,
+    required int limit,
+  }) async {
+    final rows = await _loadIdeaRows(
+      query: query,
+      after: after,
+      limit: limit + 1,
+    );
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.take(limit).toList(growable: false) : rows;
+    final items = await _ideasFromRows(pageRows);
+    final last = items.isEmpty ? null : items.last;
+
+    return IdeaPage(
+      items: items,
+      hasMore: hasMore,
+      nextCursor: hasMore && last != null
+          ? IdeaPageCursor(
+              updatedAt: last.updatedAt.toIso8601String(),
+              id: last.id,
+            )
+          : null,
+    );
   }
 
   Future<List<TodoTimeBlock>> loadTodoBlocks() async {
@@ -349,35 +379,100 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
         EntryTagsCompanion.insert(entryId: entryId, tagId: tagId));
   }
 
-  Future<List<String>> _tagsForEntry(String entryId) async {
-    final rows = await db.customSelect(
-      '''
-      SELECT t.name
-      FROM tags t
-      JOIN entry_tags et ON et.tag_id = t.id
-      WHERE et.entry_id = ?
-      ORDER BY t.name ASC
-      ''',
-      variables: [Variable.withString(entryId)],
-      readsFrom: {tags, entryTags},
-    ).get();
-
-    return rows.map((row) => row.read<String>('name')).toList(growable: false);
+  Future<List<EntryListItem>> _ideasFromRows(List<QueryRow> rows) async {
+    if (rows.isEmpty) {
+      return const [];
+    }
+    final ids =
+        rows.map((row) => row.read<String>('id')).toList(growable: false);
+    final tagsByEntry = await _tagsForEntries(ids);
+    return rows
+        .map((row) => _ideaFromRow(
+              row,
+              tagsByEntry[row.read<String>('id')] ?? const [],
+            ))
+        .toList(growable: false);
   }
 
-  Future<List<QueryRow>> _searchIdeasByText(String trimmed) async {
+  Future<Map<String, List<String>>> _tagsForEntries(
+      List<String> entryIds) async {
+    final placeholders = List.filled(entryIds.length, '?').join(', ');
+    final rows = await db
+        .customSelect(
+          '''
+      SELECT et.entry_id, t.name
+      FROM tags t
+      JOIN entry_tags et ON et.tag_id = t.id
+      WHERE et.entry_id IN ($placeholders)
+      ORDER BY et.entry_id ASC, t.name ASC
+      ''',
+          variables: entryIds.map(Variable.withString).toList(growable: false),
+          readsFrom: {tags, entryTags},
+        )
+        .get();
+
+    final tagsByEntry = <String, List<String>>{};
+    for (final row in rows) {
+      tagsByEntry
+          .putIfAbsent(row.read<String>('entry_id'), () => [])
+          .add(row.read<String>('name'));
+    }
+    return tagsByEntry;
+  }
+
+  Future<List<QueryRow>> _loadIdeaRows({
+    required String query,
+    IdeaPageCursor? after,
+    int? limit,
+  }) {
+    final trimmed = query.trim();
+    return trimmed.isEmpty
+        ? _loadAllIdeaRows(after: after, limit: limit)
+        : _searchIdeasByText(trimmed, after: after, limit: limit);
+  }
+
+  Future<List<QueryRow>> _loadAllIdeaRows({
+    IdeaPageCursor? after,
+    int? limit,
+  }) {
+    final variables = <Variable>[];
+    final cursorClause = _ideaCursorClause(after, variables);
+    final limitClause = _ideaLimitClause(limit, variables);
+    return db
+        .customSelect(
+          '''
+      SELECT e.*, i.summary, i.source_hint
+      FROM entries e
+      JOIN ideas i ON i.entry_id = e.id
+      WHERE 1 = 1 $cursorClause
+      ORDER BY e.updated_at DESC, e.id DESC
+      $limitClause
+      ''',
+          variables: variables,
+          readsFrom: {entries, ideas},
+        )
+        .get();
+  }
+
+  Future<List<QueryRow>> _searchIdeasByText(
+    String trimmed, {
+    IdeaPageCursor? after,
+    int? limit,
+  }) {
     final terms = _fuzzyTerms(trimmed);
     final whereClause = terms
         .map((_) =>
             "(f.title LIKE ? ESCAPE '\\' OR f.normalized_text LIKE ? ESCAPE '\\' OR f.raw_text LIKE ? ESCAPE '\\')")
         .join(' AND ');
-    final variables = [
+    final variables = <Variable>[
       for (final term in terms) ...[
         Variable.withString(term),
         Variable.withString(term),
         Variable.withString(term),
       ],
     ];
+    final cursorClause = _ideaCursorClause(after, variables);
+    final limitClause = _ideaLimitClause(limit, variables);
     return db
         .customSelect(
           '''
@@ -385,13 +480,33 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       FROM entry_fts f
       JOIN entries e ON e.id = f.entry_id
       JOIN ideas i ON i.entry_id = e.id
-      WHERE $whereClause
-      ORDER BY e.updated_at DESC
+      WHERE $whereClause $cursorClause
+      ORDER BY e.updated_at DESC, e.id DESC
+      $limitClause
       ''',
           variables: variables,
           readsFrom: {entries, ideas},
         )
         .get();
+  }
+
+  String _ideaCursorClause(IdeaPageCursor? after, List<Variable> variables) {
+    if (after == null) {
+      return '';
+    }
+    variables
+      ..add(Variable.withString(after.updatedAt))
+      ..add(Variable.withString(after.updatedAt))
+      ..add(Variable.withString(after.id));
+    return 'AND (e.updated_at < ? OR (e.updated_at = ? AND e.id < ?))';
+  }
+
+  String _ideaLimitClause(int? limit, List<Variable> variables) {
+    if (limit == null) {
+      return '';
+    }
+    variables.add(Variable.withInt(limit));
+    return 'LIMIT ?';
   }
 
   EntryListItem _todoFromRow(QueryRow row) {

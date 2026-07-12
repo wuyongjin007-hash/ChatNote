@@ -12,6 +12,8 @@ void main() {
   testWidgets('shows UTC stored todo times in local time', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
+    final now = DateTime.now().toLocal();
+    final localStart = DateTime(now.year, now.month, now.day, 8);
 
     await database.saveTodo(
       capture: CaptureResult(
@@ -23,8 +25,8 @@ void main() {
         followUpQuestion: null,
         shouldSave: true,
         todoPayload: TodoPayload(
-          startAt: DateTime.utc(2026, 7, 11, 0),
-          endAt: DateTime.utc(2026, 7, 11, 1),
+          startAt: localStart.toUtc(),
+          endAt: localStart.add(const Duration(hours: 1)).toUtc(),
           location: 'Room 3',
           topic: 'Project',
           reminderAt: null,
@@ -47,7 +49,8 @@ void main() {
     expect(find.textContaining('00:00-01:00'), findsNothing);
   });
 
-  testWidgets('shows today section before older todos', (tester) async {
+  testWidgets('starts with today and keeps older todos out of the first window',
+      (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final now = DateTime.now();
@@ -79,24 +82,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final todayTop =
-        tester.getTopLeft(find.byKey(const Key('todo-day-today-header'))).dy;
-    final yesterdayTop = tester
-        .getTopLeft(find.byKey(const Key('todo-day-yesterday-header')))
-        .dy;
-
-    expect(todayTop, lessThan(yesterdayTop));
+    expect(find.byKey(const Key('todo-day-today-header')), findsOneWidget);
+    expect(find.text('Today todo'), findsOneWidget);
+    expect(find.text('Yesterday todo'), findsNothing);
   });
 
   testWidgets('renders todos as compact checklist cards', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
+    final now = DateTime.now();
 
     await database.saveTodo(
       capture: _todoCapture(
         title: '去办公室做PPT',
-        startAt: DateTime(2026, 7, 11, 14),
-        endAt: DateTime(2026, 7, 11, 14, 30),
+        startAt: DateTime(now.year, now.month, now.day, 14),
+        endAt: DateTime(now.year, now.month, now.day, 14, 30),
         location: '办公室',
         topic: '做PPT',
       ),
@@ -147,7 +147,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.check), findsOneWidget);
-    final completedTitle = tester.widget<Text>(find.text('Finish presentation'));
+    final completedTitle =
+        tester.widget<Text>(find.text('Finish presentation'));
     expect(completedTitle.style?.decoration, TextDecoration.lineThrough);
     expect(completedTitle.style?.color, AppColors.textMuted);
     final saved = await database.loadTodos(

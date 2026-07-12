@@ -50,6 +50,19 @@ void main() {
       matching: find.byType(CircleAvatar),
     );
     expect(tester.getSize(identityAvatar).height, lessThanOrEqualTo(36));
+    final identity = tester.widget<Container>(
+      find.byKey(const Key('drawer-identity-panel')),
+    );
+    final identityDecoration = identity.decoration as BoxDecoration;
+    expect(identityDecoration.color, AppColors.surface);
+    expect(identityDecoration.border, isNotNull);
+
+    final selectedDestination = tester.widget<Container>(
+      find.byKey(const Key('drawer-destination-voice-selected')),
+    );
+    final selectedDecoration = selectedDestination.decoration as BoxDecoration;
+    expect(selectedDecoration.color, AppColors.accentSoft);
+    expect(selectedDecoration.border, isNotNull);
     expect(find.text('记录'), findsOneWidget);
     expect(find.text('待办'), findsOneWidget);
     expect(find.text('想法'), findsOneWidget);

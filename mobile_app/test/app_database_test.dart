@@ -82,6 +82,56 @@ void main() {
     expect(results.single.title, '万历十五年和中国通史观点差异');
   });
 
+  test('loads ideas with a stable cursor without duplicating rows', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    for (var index = 0; index < 5; index++) {
+      await database.saveIdea(
+        capture: CaptureResult(
+          intentType: CaptureIntentType.idea,
+          confidence: 0.9,
+          title: 'Paged idea $index',
+          summary: 'Paged summary $index',
+          missingFields: const [],
+          followUpQuestion: null,
+          shouldSave: true,
+          todoPayload: null,
+          ideaPayload: IdeaPayload(
+            summary: 'Paged summary $index',
+            sourceHint: null,
+            tags: ['page-$index'],
+          ),
+        ),
+        rawText: 'paged idea $index',
+      );
+    }
+
+    final first = await database.loadIdeaPage(limit: 2);
+    final second = await database.loadIdeaPage(
+      limit: 2,
+      after: first.nextCursor,
+    );
+    final third = await database.loadIdeaPage(
+      limit: 2,
+      after: second.nextCursor,
+    );
+
+    expect(first.items, hasLength(2));
+    expect(first.hasMore, isTrue);
+    expect(second.items, hasLength(2));
+    expect(second.hasMore, isTrue);
+    expect(third.items, hasLength(1));
+    expect(third.hasMore, isFalse);
+    expect(
+      [...first.items, ...second.items, ...third.items]
+          .map((item) => item.id)
+          .toSet(),
+      hasLength(5),
+    );
+    expect(first.items.first.tags, isNotEmpty);
+  });
+
   test('matches todo deletion by date, overlapping time, and keyword',
       () async {
     await database.saveTodo(

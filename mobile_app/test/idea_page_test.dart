@@ -106,6 +106,35 @@ void main() {
     expect(decoration.border, isNotNull);
   });
 
+  testWidgets('loads the next idea page near the bottom without clearing items',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    final repository = _PagingEntryRepository(database);
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          entryRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(home: Scaffold(body: IdeaQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.pageRequests, 1);
+    expect(find.text('Idea 0'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const PageStorageKey('idea-incremental-list')),
+      const Offset(0, -5000),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.pageRequests, 2);
+  });
+
   testWidgets('reveals a delete action and removes only the selected idea',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -221,4 +250,44 @@ class _ControlledRefreshEntryRepository extends EntryRepository {
     refreshCompleter = Completer<List<EntryListItem>>();
     return refreshCompleter!.future;
   }
+}
+
+class _PagingEntryRepository extends EntryRepository {
+  _PagingEntryRepository(super.database);
+
+  var pageRequests = 0;
+
+  @override
+  Future<IdeaPage> loadIdeaPage({
+    String query = '',
+    IdeaPageCursor? after,
+    int limit = 40,
+  }) async {
+    pageRequests++;
+    final start = after == null ? 0 : 40;
+    final items = List.generate(
+      40,
+      (offset) => EntryListItem(
+        id: 'idea-${start + offset}',
+        type: CaptureIntentType.idea,
+        title: 'Idea ${start + offset}',
+        rawText: '',
+        normalizedText: '',
+        createdAt: DateTime(2026, 7, 12),
+        updatedAt: DateTime(2026, 7, 12),
+        summary: 'Summary ${start + offset}',
+      ),
+    );
+    return IdeaPage(
+      items: items,
+      hasMore: start == 0,
+      nextCursor: start == 0
+          ? const IdeaPageCursor(updatedAt: '2026-07-12T00:00:00', id: 'next')
+          : null,
+    );
+  }
+
+  @override
+  Future<List<EntryListItem>> searchIdeas(String query) async =>
+      const <EntryListItem>[];
 }

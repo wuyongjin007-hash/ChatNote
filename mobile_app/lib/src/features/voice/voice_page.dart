@@ -592,12 +592,20 @@ class _DraftCard extends StatelessWidget {
     final isTodo = draft.intentType == CaptureIntentType.todo;
     final todoPayloads = draft.effectiveTodoPayloads;
     final isBatchTodo = isTodo && todoPayloads.length > 1;
-    return Card(
+    return Container(
+      key: const Key('voice-draft-card'),
       margin: const EdgeInsets.symmetric(vertical: 12),
-      color: AppColors.surface,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: AppColors.border),
+        border: Border.all(color: AppColors.accentBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0f3d3528),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -606,8 +614,21 @@ class _DraftCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(isTodo ? Icons.event_available : Icons.lightbulb_outline),
-                const SizedBox(width: 8),
+                Container(
+                  key: const Key('voice-draft-icon'),
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isTodo ? Icons.event_available : Icons.lightbulb_outline,
+                    size: 20,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                     child: Text(
                         isBatchTodo
@@ -617,7 +638,10 @@ class _DraftCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(draft.summary),
+            Text(
+              draft.summary,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
             if (isBatchTodo) ...[
               const SizedBox(height: 10),
               for (final todo in todoPayloads)
@@ -684,9 +708,33 @@ class _DraftCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  OutlinedButton(onPressed: onDiscard, child: const Text('取消')),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textMuted),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: onDiscard,
+                      child: const Text('取消'),
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  FilledButton(onPressed: onSave, child: const Text('保存')),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: onSave,
+                      child: const Text('保存'),
+                    ),
+                  ),
                 ],
               ),
             ],

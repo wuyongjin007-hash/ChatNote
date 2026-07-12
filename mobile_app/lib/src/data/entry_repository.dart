@@ -61,8 +61,20 @@ class EntryRepository {
     );
   }
 
+  Future<List<EntryListItem>> loadTodoWindow(DateTime from, DateTime to) {
+    return _database.loadTodos(from, to);
+  }
+
   Future<List<EntryListItem>> searchIdeas(String query) {
     return _database.searchIdeas(query);
+  }
+
+  Future<IdeaPage> loadIdeaPage({
+    String query = '',
+    IdeaPageCursor? after,
+    int limit = 40,
+  }) {
+    return _database.loadIdeaPage(query: query, after: after, limit: limit);
   }
 
   Future<void> deleteIdea(String id) {

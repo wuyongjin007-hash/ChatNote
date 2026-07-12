@@ -234,21 +234,23 @@ class _AppDrawer extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
+                key: const Key('drawer-identity-panel'),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.accentBorder),
                 ),
                 child: const Row(
                   children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor: AppColors.primarySoft,
+                      backgroundColor: AppColors.accentSoft,
                       child: Icon(
                         Icons.mic_none_rounded,
                         size: 20,
-                        color: AppColors.primary,
+                        color: AppColors.accent,
                       ),
                     ),
                     SizedBox(width: 10),
@@ -358,29 +360,38 @@ class _DrawerDestinationTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Material(
-        color: selected ? AppColors.primarySoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
           key: Key('drawer-destination-$id'),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
           onTap: () => onNavigate(path),
           child: Container(
             key: selected ? Key('drawer-destination-$id-selected') : null,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: selected
+                  ? const Border(
+                      left: BorderSide(color: AppColors.accent, width: 3),
+                    )
+                  : null,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             child: Row(
               children: [
                 Icon(
                   selected ? selectedIcon : icon,
-                  color: selected ? AppColors.primary : AppColors.textPrimary,
+                  color: selected ? AppColors.accent : AppColors.textPrimary,
                 ),
                 const SizedBox(width: 14),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 17,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     color: selected
-                        ? AppColors.primaryDark
+                        ? AppColors.textPrimary
                         : AppColors.textPrimary,
                   ),
                 ),

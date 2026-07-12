@@ -30,7 +30,7 @@ void main() {
     expect(find.byKey(const Key('voice-assistant-prompt')), findsOneWidget);
     expect(find.byIcon(Icons.smart_toy_outlined), findsOneWidget);
     expect(find.text('AI 助手提示'), findsOneWidget);
-    expect(find.text('试着说出你的想法，我会帮你整理和保存。'), findsOneWidget);
+    expect(find.text('说出你的想法，我会帮你整理和保存。'), findsOneWidget);
     expect(find.text('记录一个突发的灵感'), findsOneWidget);
     expect(find.text('整理今天想做的几件事'), findsOneWidget);
     expect(find.text('记录一个问题或需要解决的困扰'), findsOneWidget);
@@ -131,6 +131,14 @@ void main() {
 
     expect(find.text('Budget meeting'), findsOneWidget);
     expect(find.text('缺少信息：location'), findsOneWidget);
+
+    final draftCard = tester.widget<Container>(
+      find.byKey(const Key('voice-draft-card')),
+    );
+    final draftDecoration = draftCard.decoration as BoxDecoration;
+    expect(draftDecoration.color, AppColors.surface);
+    expect(draftDecoration.border, isNotNull);
+    expect(find.byKey(const Key('voice-draft-icon')), findsOneWidget);
   });
 
   testWidgets(
