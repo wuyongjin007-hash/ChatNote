@@ -50,6 +50,10 @@ class EntryRepository {
     return _database.findTodosForDeletion(payload);
   }
 
+  Future<List<EntryListItem>> loadTodosByIds(List<String> ids) {
+    return _database.loadTodosByIds(ids);
+  }
+
   Future<void> deleteTodos(List<String> ids) {
     return _database.deleteTodos(ids);
   }

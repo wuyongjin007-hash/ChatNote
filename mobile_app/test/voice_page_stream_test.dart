@@ -326,6 +326,64 @@ void main() {
     expect(await database.loadTodoBlocks(), isEmpty);
   });
 
+  testWidgets(
+      'deletes only the immediately preceding query results when user refers to them',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await database.saveTodo(
+      capture: _todoAt('Query result one', DateTime(2026, 7, 12, 9)),
+      rawText: 'query result one',
+    );
+    await database.saveTodo(
+      capture: _todoAt('Query result two', DateTime(2026, 7, 12, 10)),
+      rawText: 'query result two',
+    );
+    await database.saveTodo(
+      capture: _todoAt('Query result three', DateTime(2026, 7, 12, 11)),
+      rawText: 'query result three',
+    );
+    await database.saveTodo(
+      capture: _todoAt('Must remain', DateTime(2026, 7, 13, 9)),
+      rawText: 'must remain',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider.overrideWithValue(
+            _QueryThenDeleteCaptureConversationAgent(),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '查询明天的待办');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '把这些待办全部删除');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('准备删除 3 条待办'), findsOneWidget);
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    final remaining = await database.loadTodos(
+      DateTime(2026, 7, 12),
+      DateTime(2026, 7, 14),
+    );
+    expect(remaining.map((todo) => todo.title), ['Must remain']);
+  });
+
   testWidgets('shows and saves multiple todo drafts from one message',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -469,14 +527,85 @@ class _FakeCaptureConversationAgent implements CaptureConversationAgent {
   List<Map<String, String>> get memory => [];
 
   @override
-  ConversationSnapshot get displaySnapshot =>
-      const ConversationSnapshot(messages: [], activeDraft: null, state: CaptureSessionState.idle);
+  List<String> get lastQueryTodoIds => const [];
+
+  @override
+  ConversationSnapshot get displaySnapshot => const ConversationSnapshot(
+      messages: [], activeDraft: null, state: CaptureSessionState.idle);
 
   @override
   void appendDisplayMessage(ConversationMessage message) {}
 
   @override
   void updateLastDisplayMessage(String text) {}
+
+  @override
+  void rememberLastQueryTodoIds(Iterable<String> ids) {}
+
+  @override
+  void clearLastQueryTodoIds() {}
+}
+
+class _QueryThenDeleteCaptureConversationAgent
+    extends _FakeCaptureConversationAgent {
+  @override
+  Stream<CaptureAgentStreamEvent> submitTextStream(String text) async* {
+    if (text.contains('查询')) {
+      yield CaptureAgentTurnDone(
+        CaptureTurn(
+          capture: CaptureResult(
+            intentType: CaptureIntentType.todoQuery,
+            confidence: 0.98,
+            title: '明天待办',
+            summary: '查询明天待办',
+            missingFields: const [],
+            followUpQuestion: null,
+            shouldSave: false,
+            todoPayload: null,
+            ideaPayload: null,
+            todoQueryPayload: TodoQueryPayload(
+              dateFrom: DateTime(2026, 7, 12),
+              dateTo: DateTime(2026, 7, 13),
+              keyword: null,
+              includeCompleted: false,
+              importanceRequested: false,
+            ),
+          ),
+          rawTranscript: text,
+          isFollowUp: false,
+          usedFallback: false,
+        ),
+      );
+      return;
+    }
+
+    yield CaptureAgentTurnDone(
+      CaptureTurn(
+        capture: CaptureResult(
+          intentType: CaptureIntentType.todoDelete,
+          confidence: 0.98,
+          title: '删除这些待办',
+          summary: '删除查询结果',
+          missingFields: const [],
+          followUpQuestion: null,
+          shouldSave: false,
+          todoPayload: null,
+          ideaPayload: null,
+          todoDeletePayload: const TodoDeletePayload(
+            operation: TodoDeleteOperation.clear,
+            dateFrom: null,
+            dateTo: null,
+            timeFrom: null,
+            timeTo: null,
+            keyword: null,
+          ),
+        ),
+        rawTranscript: text,
+        isFollowUp: false,
+        usedFallback: false,
+      ),
+    );
+  }
 }
 
 class _FakeSpeechService implements VolcengineSpeechService {
@@ -584,6 +713,27 @@ CaptureResult _deleteDraft() {
       timeTo: null,
       keyword: 'Existing',
     ),
+  );
+}
+
+CaptureResult _todoAt(String title, DateTime startAt) {
+  return CaptureResult(
+    intentType: CaptureIntentType.todo,
+    confidence: 0.98,
+    title: title,
+    summary: title,
+    missingFields: const [],
+    followUpQuestion: null,
+    shouldSave: true,
+    todoPayload: TodoPayload(
+      startAt: startAt,
+      endAt: startAt.add(const Duration(minutes: 30)),
+      location: null,
+      topic: null,
+      reminderAt: null,
+      status: 'pending',
+    ),
+    ideaPayload: null,
   );
 }
 

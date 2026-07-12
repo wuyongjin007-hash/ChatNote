@@ -287,17 +287,19 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
 
     final whereClause = conditions.join(' AND ');
 
-    final rows = await db.customSelect(
-      '''
+    final rows = await db
+        .customSelect(
+          '''
       SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
       FROM entries e
       JOIN todos t ON t.entry_id = e.id
       WHERE $whereClause
       ORDER BY t.start_at ASC
       ''',
-      variables: vars,
-      readsFrom: {entries, todos},
-    ).get();
+          variables: vars,
+          readsFrom: {entries, todos},
+        )
+        .get();
 
     var results = rows.map(_todoFromRow).toList(growable: false);
 
@@ -422,6 +424,28 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     }).toList(growable: false);
   }
 
+  Future<List<EntryListItem>> loadTodosByIds(List<String> ids) async {
+    if (ids.isEmpty) {
+      return const [];
+    }
+
+    final placeholders = List.filled(ids.length, '?').join(', ');
+    final rows = await db
+        .customSelect(
+          '''
+      SELECT e.*, t.start_at, t.end_at, t.location, t.topic, t.status, t.reminder_at
+      FROM entries e
+      JOIN todos t ON t.entry_id = e.id
+      WHERE e.id IN ($placeholders)
+      ORDER BY t.start_at ASC
+      ''',
+          variables: ids.map(Variable.withString).toList(growable: false),
+          readsFrom: {entries, todos},
+        )
+        .get();
+    return rows.map(_todoFromRow).toList(growable: false);
+  }
+
   Future<void> deleteTodos(List<String> ids) async {
     if (ids.isEmpty) {
       return;
@@ -524,16 +548,14 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   }
 
   Future<void> deleteSession(String id) async {
-    await (db.delete(db.captureSessions)
-          ..where((table) => table.id.equals(id)))
+    await (db.delete(db.captureSessions)..where((table) => table.id.equals(id)))
         .go();
   }
 
   CaptureSessionRow _sessionFromRow(dynamic row) {
     return CaptureSessionRow(
       id: row is QueryRow ? row.read<String>('id') : row.id,
-      rawText:
-          row is QueryRow ? row.read<String>('raw_text') : row.rawText,
+      rawText: row is QueryRow ? row.read<String>('raw_text') : row.rawText,
       status: row is QueryRow ? row.read<String>('status') : row.status,
       createdAt:
           row is QueryRow ? row.read<String>('created_at') : row.createdAt,

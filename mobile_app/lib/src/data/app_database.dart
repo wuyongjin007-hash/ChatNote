@@ -45,8 +45,7 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.addColumn(
                 captureSessions, captureSessions.conversationJson);
-            await m.addColumn(
-                captureSessions, captureSessions.activeDraftJson);
+            await m.addColumn(captureSessions, captureSessions.activeDraftJson);
             await m.addColumn(
                 captureSessions, captureSessions.recoverableDraftJson);
             await m.addColumn(captureSessions, captureSessions.expiresAt);
@@ -105,6 +104,10 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<EntryListItem>> findTodosForDeletion(TodoDeletePayload payload) {
     return entryDao.findTodosForDeletion(payload);
+  }
+
+  Future<List<EntryListItem>> loadTodosByIds(List<String> ids) {
+    return entryDao.loadTodosByIds(ids);
   }
 
   Future<void> deleteTodos(List<String> ids) {

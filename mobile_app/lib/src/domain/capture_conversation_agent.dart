@@ -102,7 +102,13 @@ class ConversationSnapshot {
   final CaptureSessionState state;
 }
 
-enum CaptureSessionState { idle, collecting, ready, cancelledRecoverable, completed }
+enum CaptureSessionState {
+  idle,
+  collecting,
+  ready,
+  cancelledRecoverable,
+  completed
+}
 
 class CaptureConversationAgent {
   CaptureConversationAgent({
@@ -126,6 +132,7 @@ class CaptureConversationAgent {
   final List<Map<String, String>> _memory = [];
   final List<String> _rawInputs = [];
   final List<ConversationMessage> _displayTranscript = [];
+  final List<String> _lastQueryTodoIds = [];
 
   CaptureResult? _draft;
   CaptureSessionState _state = CaptureSessionState.idle;
@@ -141,6 +148,7 @@ class CaptureConversationAgent {
   CaptureResult? get draft => _draft;
   String get sessionId => _sessionId;
   List<Map<String, String>> get memory => List.unmodifiable(_memory);
+  List<String> get lastQueryTodoIds => List.unmodifiable(_lastQueryTodoIds);
 
   ConversationSnapshot get displaySnapshot => ConversationSnapshot(
         messages: List.unmodifiable(_displayTranscript),
@@ -158,6 +166,16 @@ class CaptureConversationAgent {
       _displayTranscript[_displayTranscript.length - 1] =
           ConversationMessage(isUser: last.isUser, text: text);
     }
+  }
+
+  void rememberLastQueryTodoIds(Iterable<String> ids) {
+    _lastQueryTodoIds
+      ..clear()
+      ..addAll(ids);
+  }
+
+  void clearLastQueryTodoIds() {
+    _lastQueryTodoIds.clear();
   }
 
   bool get _hasPendingDraft {
@@ -253,7 +271,8 @@ class CaptureConversationAgent {
       }
 
       if (capture.intentType == CaptureIntentType.todoQuery) {
-        _storeMemory(normalized,
+        _storeMemory(
+            normalized,
             assistantBuffer.toString().isNotEmpty
                 ? assistantBuffer.toString()
                 : capture.followUpQuestion ?? capture.summary);
@@ -306,6 +325,7 @@ class CaptureConversationAgent {
     _memory.clear();
     _rawInputs.clear();
     _displayTranscript.clear();
+    _lastQueryTodoIds.clear();
     _state = CaptureSessionState.idle;
     _sessionId = _newSessionId();
   }
@@ -327,8 +347,7 @@ class CaptureConversationAgent {
     await _persistSession(
       'cancelledRecoverable',
       recoverableDraftJson: jsonEncode(draft.toJson()),
-      expiresAt:
-          now.add(const Duration(minutes: 30)).toIso8601String(),
+      expiresAt: now.add(const Duration(minutes: 30)).toIso8601String(),
     );
 
     _draft = null;
@@ -371,6 +390,7 @@ class CaptureConversationAgent {
     _draft = null;
     _memory.clear();
     _rawInputs.clear();
+    _lastQueryTodoIds.clear();
     _state = CaptureSessionState.completed;
     await _persistSession('completed');
   }
@@ -380,6 +400,7 @@ class CaptureConversationAgent {
     _memory.clear();
     _rawInputs.clear();
     _displayTranscript.clear();
+    _lastQueryTodoIds.clear();
     _state = CaptureSessionState.idle;
     if (_repository != null) {
       await _repository!.deleteSession(_sessionId);

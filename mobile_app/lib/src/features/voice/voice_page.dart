@@ -28,6 +28,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   String? _rawText;
   List<TodoTimeBlock> _conflicts = const [];
   List<EntryListItem> _deleteMatches = const [];
+  List<EntryListItem> _lastQueryMatches = const [];
   _VoiceStage _voiceStage = _VoiceStage.idle;
   bool _aiBusy = false;
   bool _recordingWillCancel = false;
@@ -47,8 +48,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   void _restoreDisplayFromAgent() {
-    final snapshot =
-        ref.read(captureConversationAgentProvider).displaySnapshot;
+    final snapshot = ref.read(captureConversationAgentProvider).displaySnapshot;
     if (snapshot.messages.isEmpty) {
       return;
     }
@@ -227,9 +227,11 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       return;
     }
     if (draft.missingFields
-        .where((field) =>
-            field != 'location' && field != 'topic' && field != 'reminder_at')
-        .isNotEmpty ||
+            .where((field) =>
+                field != 'location' &&
+                field != 'topic' &&
+                field != 'reminder_at')
+            .isNotEmpty ||
         !draft.shouldSave) {
       _addAssistant(draft.followUpQuestion ?? '这条记录还缺少关键信息，请继续补充。');
       return;
@@ -259,9 +261,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       ref.read(captureConversationAgentProvider).appendDisplayMessage(
             ConversationMessage(
                 isUser: false,
-                text: savedIds.length > 1
-                    ? '已保存 ${savedIds.length} 条待办'
-                    : '已保存'),
+                text:
+                    savedIds.length > 1 ? '已保存 ${savedIds.length} 条待办' : '已保存'),
           );
     });
     _scrollToBottom();
@@ -310,8 +311,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _conflicts = const [];
       _deleteMatches = const [];
       _voiceStage = _VoiceStage.idle;
-      _messages.add(const _ChatMessage.assistant(
-          '已取消本次录入，30分钟内可以继续修改刚才的内容。'));
+      _messages.add(const _ChatMessage.assistant('已取消本次录入，30分钟内可以继续修改刚才的内容。'));
       ref.read(captureConversationAgentProvider).appendDisplayMessage(
             const ConversationMessage(
                 isUser: false, text: '已取消本次录入，30分钟内可以继续修改刚才的内容。'),
@@ -372,17 +372,23 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         return;
       }
 
-      final results = await ref.read(entryRepositoryProvider).queryTodos(payload);
+      final results =
+          await ref.read(entryRepositoryProvider).queryTodos(payload);
       if (!mounted) {
         return;
       }
 
       final queryReply = _buildQueryReply(payload, results, capture);
-      _replaceMessage(assistantMessageIndex, _ChatMessage.assistant(queryReply));
+      _replaceMessage(
+          assistantMessageIndex, _ChatMessage.assistant(queryReply));
       ref.read(captureConversationAgentProvider).appendDisplayMessage(
             ConversationMessage(isUser: false, text: queryReply),
           );
+      ref
+          .read(captureConversationAgentProvider)
+          .rememberLastQueryTodoIds(results.map((item) => item.id));
       setState(() {
+        _lastQueryMatches = results;
         _aiBusy = false;
         _voiceStage = _VoiceStage.idle;
       });
@@ -392,20 +398,31 @@ class _VoicePageState extends ConsumerState<VoicePage> {
 
     if (capture.intentType == CaptureIntentType.todoDelete) {
       final payload = capture.todoDeletePayload;
-      final matches = payload == null
-          ? const <EntryListItem>[]
-          : await ref
-              .read(entryRepositoryProvider)
-              .findTodosForDeletion(payload);
+      final agent = ref.read(captureConversationAgentProvider);
+      final queryIds = agent.lastQueryTodoIds.isNotEmpty
+          ? agent.lastQueryTodoIds
+          : _lastQueryMatches.map((item) => item.id).toList(growable: false);
+      final refersToLastQuery =
+          _refersToLastQuery(turn.rawTranscript, queryIds);
+      final matches = refersToLastQuery
+          ? _lastQueryMatches.isNotEmpty
+              ? _lastQueryMatches
+              : await ref.read(entryRepositoryProvider).loadTodosByIds(queryIds)
+          : payload == null
+              ? const <EntryListItem>[]
+              : await ref
+                  .read(entryRepositoryProvider)
+                  .findTodosForDeletion(payload);
       if (!mounted) {
         return;
       }
-      ref.read(captureConversationAgentProvider).reset();
       setState(() {
         _draft = null;
         _rawText = null;
         _conflicts = const [];
         _deleteMatches = matches;
+        _lastQueryMatches = const [];
+        agent.clearLastQueryTodoIds();
         if (_messages[assistantMessageIndex].text.trim().isEmpty) {
           final deleteText = matches.isEmpty
               ? '没有找到符合条件的待办。'
@@ -417,12 +434,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         } else if (matches.isEmpty) {
           _messages.add(const _ChatMessage.assistant('没有找到符合条件的待办。'));
           ref.read(captureConversationAgentProvider).appendDisplayMessage(
-                const ConversationMessage(
-                    isUser: false, text: '没有找到符合条件的待办。'),
+                const ConversationMessage(isUser: false, text: '没有找到符合条件的待办。'),
               );
         }
-        final deleteDisplayText =
-            _messages[assistantMessageIndex].text.trim();
+        final deleteDisplayText = _messages[assistantMessageIndex].text.trim();
         if (deleteDisplayText.isNotEmpty) {
           ref.read(captureConversationAgentProvider).appendDisplayMessage(
                 ConversationMessage(isUser: false, text: deleteDisplayText),
@@ -440,6 +455,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       return;
     }
     setState(() {
+      _lastQueryMatches = const [];
+      ref.read(captureConversationAgentProvider).clearLastQueryTodoIds();
       _draft = capture;
       _rawText = turn.rawTranscript;
       _conflicts = conflicts;
@@ -449,18 +466,27 @@ class _VoicePageState extends ConsumerState<VoicePage> {
           text: capture.followUpQuestion ?? '我整理好了，请确认是否保存。',
         );
       }
-      final assistantDisplayText =
-          _messages[assistantMessageIndex].text.trim();
+      final assistantDisplayText = _messages[assistantMessageIndex].text.trim();
       if (assistantDisplayText.isNotEmpty) {
         ref.read(captureConversationAgentProvider).appendDisplayMessage(
-              ConversationMessage(
-                  isUser: false, text: assistantDisplayText),
+              ConversationMessage(isUser: false, text: assistantDisplayText),
             );
       }
       _aiBusy = false;
       _voiceStage = _VoiceStage.idle;
     });
     _scrollToBottom();
+  }
+
+  bool _refersToLastQuery(String text, List<String> lastQueryTodoIds) {
+    if (lastQueryTodoIds.isEmpty) {
+      return false;
+    }
+
+    final normalized = text.replaceAll(RegExp(r'\s+'), '');
+    return RegExp(
+      r'(这些|这几|刚才|上面|上述|它们)|((全部|全都|都).{0,6}(删除|删掉|清空))|((删除|删掉|清空).{0,6}(全部|全都|都))',
+    ).hasMatch(normalized);
   }
 
   void _scrollToBottom() {
@@ -476,8 +502,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     });
   }
 
-  String _buildQueryReply(
-      TodoQueryPayload payload, List<EntryListItem> results, CaptureResult capture) {
+  String _buildQueryReply(TodoQueryPayload payload, List<EntryListItem> results,
+      CaptureResult capture) {
     final buffer = StringBuffer();
     final dateLabel = _queryDateLabel(payload);
     buffer.writeln(dateLabel);
@@ -507,8 +533,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
 
   String _queryDateLabel(TodoQueryPayload payload) {
     if (payload.dateFrom != null && payload.dateTo != null) {
-      final diff =
-          payload.dateTo!.difference(payload.dateFrom!).inDays;
+      final diff = payload.dateTo!.difference(payload.dateFrom!).inDays;
       if (diff == 1) {
         final month = payload.dateFrom!.month;
         final day = payload.dateFrom!.day;
@@ -528,23 +553,19 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   String _generateSuggestions(
       List<EntryListItem> todos, TodoQueryPayload payload) {
     final suggestions = <String>[];
-    final sortedTodos = todos
-        .where((todo) => todo.startAt != null)
-        .toList()
+    final sortedTodos = todos.where((todo) => todo.startAt != null).toList()
       ..sort((a, b) => a.startAt!.compareTo(b.startAt!));
 
     for (var index = 0; index < sortedTodos.length - 1; index++) {
       final current = sortedTodos[index];
       final next = sortedTodos[index + 1];
       if (current.endAt != null && next.startAt != null) {
-        final gap =
-            next.startAt!.difference(current.endAt!).inMinutes;
+        final gap = next.startAt!.difference(current.endAt!).inMinutes;
         if (gap < 30 && gap >= 0) {
           suggestions.add(
               '「${current.title}」和「${next.title}」间隔较短（${gap}分钟），建议提前安排出行时间。');
         } else if (gap < 0) {
-          suggestions.add(
-              '「${current.title}」与「${next.title}」时间重叠，请注意调整。');
+          suggestions.add('「${current.title}」与「${next.title}」时间重叠，请注意调整。');
         }
       }
     }
@@ -557,8 +578,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         }
       }
       if (todo.endAt != null && todo.startAt != null) {
-        final duration =
-            todo.endAt!.difference(todo.startAt!).inMinutes;
+        final duration = todo.endAt!.difference(todo.startAt!).inMinutes;
         if (duration > 120) {
           suggestions.add('「${todo.title}」持续时间较长（${duration}分钟）。');
         }
@@ -966,8 +986,8 @@ class _DraftCard extends StatelessWidget {
                 ),
             ],
             if (draft.missingFields
-                    .where((f) => _fieldLabel(f) != null)
-                    .isNotEmpty) ...[
+                .where((f) => _fieldLabel(f) != null)
+                .isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                   '缺少信息：${draft.missingFields.where((f) => _fieldLabel(f) != null).map((f) => _fieldLabel(f)!).join('、')}',
@@ -998,7 +1018,8 @@ class _DraftCard extends StatelessWidget {
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.textPrimary,
-                                side: const BorderSide(color: AppColors.textMuted),
+                                side: const BorderSide(
+                                    color: AppColors.textMuted),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
