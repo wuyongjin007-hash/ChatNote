@@ -5,8 +5,8 @@
 
     <application
         android:name="${applicationName}"
-        android:label="语音想法记录"
-        android:icon="@drawable/ic_launcher"
+        android:label="ChatNote"
+        android:icon="@drawable/chatnote_launcher"
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
