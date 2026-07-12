@@ -65,5 +65,9 @@ class EntryRepository {
     return _database.searchIdeas(query);
   }
 
+  Future<void> deleteIdea(String id) {
+    return _database.deleteEntry(id);
+  }
+
   Future<void> clearAll() => _database.clearAll();
 }

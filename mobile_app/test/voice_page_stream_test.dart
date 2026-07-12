@@ -322,7 +322,7 @@ void main() {
     final todos =
         await database.loadTodos(DateTime(2026, 7, 11), DateTime(2026, 7, 12));
     expect(todos.map((todo) => todo.title), ['Office report', 'Buy fruit']);
-    expect(find.text('已保存 2 条待办到手机本地。'), findsOneWidget);
+    expect(find.text('已保存 2 条待办'), findsOneWidget);
     expect(find.text('Saved 2 todos locally.'), findsNothing);
   });
 

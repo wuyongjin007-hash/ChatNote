@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
@@ -104,7 +105,9 @@ class _TodoListState extends ConsumerState<_TodoList> {
 
   Future<void> _toggleTodo(EntryListItem todo) async {
     final nextStatus = todo.status == 'completed' ? 'pending' : 'completed';
-    await ref.read(entryRepositoryProvider).updateTodoStatus(todo.id, nextStatus);
+    await ref
+        .read(entryRepositoryProvider)
+        .updateTodoStatus(todo.id, nextStatus);
     if (!mounted) {
       return;
     }
@@ -133,15 +136,61 @@ class _TodoListState extends ConsumerState<_TodoList> {
   }
 }
 
-class _IdeaList extends ConsumerWidget {
+class _IdeaList extends ConsumerStatefulWidget {
   const _IdeaList({required this.queryBuilder});
 
   final String Function() queryBuilder;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_IdeaList> createState() => _IdeaListState();
+}
+
+class _IdeaListState extends ConsumerState<_IdeaList> {
+  static const _deleteAnimationDuration = Duration(milliseconds: 420);
+
+  late String _query;
+  late Future<List<EntryListItem>> _ideas;
+  final _deletingIdeaIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _query = widget.queryBuilder();
+    _ideas = ref.read(entryRepositoryProvider).searchIdeas(_query);
+  }
+
+  @override
+  void didUpdateWidget(covariant _IdeaList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _query = widget.queryBuilder();
+    _ideas = ref.read(entryRepositoryProvider).searchIdeas(_query);
+  }
+
+  Future<void> _deleteIdea(String id) async {
+    if (_deletingIdeaIds.contains(id)) {
+      return;
+    }
+
+    setState(() {
+      _deletingIdeaIds.add(id);
+    });
+
+    final repository = ref.read(entryRepositoryProvider);
+    await Future<void>.delayed(_deleteAnimationDuration);
+    await repository.deleteIdea(id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _deletingIdeaIds.remove(id);
+      _ideas = repository.searchIdeas(_query);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<List<EntryListItem>>(
-      future: ref.watch(entryRepositoryProvider).searchIdeas(queryBuilder()),
+      future: _ideas,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -155,85 +204,154 @@ class _IdeaList extends ConsumerWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final idea = ideas[index];
-            return Container(
-              key: const Key('idea-card'),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.035),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: IntrinsicHeight(
-                child: Row(
+            return _IdeaDeleteAnimation(
+              key: Key('idea-delete-animation-${idea.id}'),
+              isDeleting: _deletingIdeaIds.contains(idea.id),
+              child: Slidable(
+                key: Key('idea-card-${idea.id}'),
+                groupTag: 'ideas',
+                endActionPane: ActionPane(
+                  motion: const ScrollMotion(),
+                  extentRatio: 0.22,
                   children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              idea.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.2,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              idea.summary ?? idea.normalizedText,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    height: 1.35,
-                                  ),
-                            ),
-                            if (idea.tags.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 9),
-                                child: Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    for (final tag in idea.tags)
-                                      _IdeaTagPill(tag: tag),
-                                  ],
-                                ),
-                              ),
-                          ],
+                    CustomSlidableAction(
+                      key: Key('idea-delete-action-${idea.id}'),
+                      onPressed: (_) => _deleteIdea(idea.id),
+                      padding: const EdgeInsets.only(left: 10),
+                      backgroundColor: Colors.transparent,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: Color(0xffff3b30),
+                          shape: BoxShape.circle,
                         ),
-                      ),
-                    ),
-                    Container(
-                      width: 4,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accentLine,
-                        borderRadius: BorderRadius.horizontal(
-                          right: Radius.circular(8),
+                        child: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.white,
+                          size: 28,
                         ),
                       ),
                     ),
                   ],
                 ),
+                child: Container(
+                  key: const Key('idea-card'),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.035),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  idea.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.2,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  idea.summary ?? idea.normalizedText,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        height: 1.35,
+                                      ),
+                                ),
+                                if (idea.tags.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 9),
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        for (final tag in idea.tags)
+                                          _IdeaTagPill(tag: tag),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 4,
+                          decoration: const BoxDecoration(
+                            color: AppColors.accentLine,
+                            borderRadius: BorderRadius.horizontal(
+                              right: Radius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _IdeaDeleteAnimation extends StatelessWidget {
+  const _IdeaDeleteAnimation({
+    super.key,
+    required this.isDeleting,
+    required this.child,
+  });
+
+  final bool isDeleting;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDeleting) {
+      return child;
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: _IdeaListState._deleteAnimationDuration,
+      curve: Curves.easeInOutCubic,
+      child: child,
+      builder: (context, progress, child) {
+        final opacity = 1 - (progress / 0.34).clamp(0.0, 1.0);
+        final heightFactor = progress <= 0.22
+            ? 1.0
+            : 1 - ((progress - 0.22) / 0.78).clamp(0.0, 1.0);
+        return SizeTransition(
+          alignment: Alignment.topCenter,
+          sizeFactor: AlwaysStoppedAnimation(heightFactor),
+          child: Opacity(opacity: opacity, child: child),
         );
       },
     );
@@ -374,9 +492,8 @@ class _TodoCard extends StatelessWidget {
                 width: 22,
                 height: 22,
                 decoration: BoxDecoration(
-                  color: isCompleted
-                      ? AppColors.surfaceSoft
-                      : Colors.transparent,
+                  color:
+                      isCompleted ? AppColors.surfaceSoft : Colors.transparent,
                   borderRadius: BorderRadius.circular(5),
                   border: Border.all(
                     color: AppColors.textMuted,
@@ -410,9 +527,8 @@ class _TodoCard extends StatelessWidget {
                                 : AppColors.textPrimary,
                             fontWeight: FontWeight.w400,
                             height: 1.2,
-                            decoration: isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
+                            decoration:
+                                isCompleted ? TextDecoration.lineThrough : null,
                             decorationColor: AppColors.textMuted,
                           ),
                     ),

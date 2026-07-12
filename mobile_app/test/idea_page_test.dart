@@ -102,4 +102,87 @@ void main() {
     expect(decoration.color, AppColors.surface);
     expect(decoration.border, isNotNull);
   });
+
+  testWidgets('reveals a delete action and removes only the selected idea',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    final deleteId = await database.saveIdea(
+      capture: const CaptureResult(
+        intentType: CaptureIntentType.idea,
+        confidence: 0.96,
+        title: 'Delete this idea',
+        summary: 'This idea should disappear',
+        missingFields: [],
+        followUpQuestion: null,
+        shouldSave: true,
+        todoPayload: null,
+        ideaPayload: IdeaPayload(
+          summary: 'This idea should disappear',
+          sourceHint: null,
+          tags: [],
+        ),
+      ),
+      rawText: 'delete this idea',
+    );
+    await database.saveIdea(
+      capture: const CaptureResult(
+        intentType: CaptureIntentType.idea,
+        confidence: 0.96,
+        title: 'Keep this idea',
+        summary: 'This idea should remain',
+        missingFields: [],
+        followUpQuestion: null,
+        shouldSave: true,
+        todoPayload: null,
+        ideaPayload: IdeaPayload(
+          summary: 'This idea should remain',
+          sourceHint: null,
+          tags: [],
+        ),
+      ),
+      rawText: 'keep this idea',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: IdeaQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(Key('idea-card-$deleteId')),
+      const Offset(-260, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(Key('idea-delete-action-$deleteId')), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    await tester.tap(find.byKey(Key('idea-delete-action-$deleteId')));
+    await tester.pump();
+
+    expect(find.byKey(Key('idea-delete-animation-$deleteId')), findsOneWidget);
+    final sizeTransition = tester.widget<SizeTransition>(
+      find.descendant(
+        of: find.byKey(Key('idea-delete-animation-$deleteId')),
+        matching: find.byType(SizeTransition),
+      ),
+    );
+    expect(sizeTransition.alignment, Alignment.topCenter);
+    expect(find.text('Delete this idea'), findsOneWidget);
+    expect(await database.searchIdeas('Delete this idea'), hasLength(1));
+
+    await tester.pump(const Duration(milliseconds: 440));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete this idea'), findsNothing);
+    expect(find.text('Keep this idea'), findsOneWidget);
+    expect(await database.searchIdeas('Delete this idea'), isEmpty);
+    expect(await database.searchIdeas('Keep this idea'), hasLength(1));
+    expect(find.byType(SnackBar), findsNothing);
+  });
 }
