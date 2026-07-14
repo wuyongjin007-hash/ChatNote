@@ -1,0 +1,6 @@
+[submodule "mobile_app/third_party/FunASR"]
+	path = mobile_app/third_party/FunASR
+	url = https://github.com/modelscope/FunASR.git
+[submodule "mobile_app/third_party/llama.cpp"]
+	path = mobile_app/third_party/llama.cpp
+	url = https://gitcode.com/gh_mirrors/ll/llama.cpp.git
