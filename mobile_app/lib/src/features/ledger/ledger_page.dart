@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/page_header.dart';
 
 class LedgerPage extends ConsumerStatefulWidget {
@@ -52,6 +53,11 @@ class _LedgerPageState extends ConsumerState<LedgerPage> {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       builder: (context) => _LedgerEditorSheet(
         database: ref.read(databaseProvider),
         row: row,
@@ -294,7 +300,7 @@ class _LedgerEditorSheetState extends State<_LedgerEditorSheet> {
     );
     _noteController = TextEditingController(text: widget.row.note);
     _direction = widget.row.direction;
-    _category = widget.row.categoryCode;
+    _category = _normalizedCategory(widget.row.categoryCode, _direction);
     _occurredAt = DateTime.parse(widget.row.occurredAt).toLocal();
   }
 
@@ -327,6 +333,41 @@ class _LedgerEditorSheetState extends State<_LedgerEditorSheet> {
           'tobacco_alcohol',
           'other_expense'
         ];
+
+  String _normalizedCategory(String code, String direction) {
+    const aliases = {
+      'dining': 'food',
+      'restaurant': 'food',
+      'meal': 'food',
+      'travel': 'transport',
+      'other': 'other_expense',
+    };
+    final normalized = aliases[code] ?? code;
+    final supported = direction == 'income'
+        ? const [
+            'salary',
+            'bonus',
+            'part_time',
+            'investment',
+            'refund',
+            'gift',
+            'other_income',
+          ]
+        : const [
+            'food',
+            'transport',
+            'shopping',
+            'housing',
+            'entertainment',
+            'medical',
+            'education',
+            'social',
+            'tobacco_alcohol',
+            'other_expense',
+          ];
+    if (supported.contains(normalized)) return normalized;
+    return direction == 'income' ? 'other_income' : 'other_expense';
+  }
 
   Future<void> _save() async {
     final cents = _parseCents(_amountController.text);
@@ -361,6 +402,22 @@ class _LedgerEditorSheetState extends State<_LedgerEditorSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        key: const Key('ledger-delete-confirmation-dialog'),
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        titleTextStyle: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: const TextStyle(
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
         title: const Text('删除账目？'),
         content: Text('确定删除“${widget.row.note}”吗？此操作无法撤销。'),
         actions: [

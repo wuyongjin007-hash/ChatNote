@@ -8,6 +8,46 @@ import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/settings/settings_store.dart';
 
 void main() {
+  test('uses the selected DeepSeek configuration for voice capture', () async {
+    late http.BaseRequest received;
+    late Map<String, dynamic> requestBody;
+    final client = VolcengineArkCaptureClient(
+      _DeepSeekSettingsStore(),
+      httpClient: MockClient.streaming((request, bodyStream) async {
+        received = request;
+        requestBody = jsonDecode(await utf8.decodeStream(bodyStream))
+            as Map<String, dynamic>;
+        return http.StreamedResponse(
+          Stream.value(
+            _sseChunk('已整理<<<CAPTURE_JSON>>>${jsonEncode({
+                      'intent_type': 'idea',
+                      'confidence': 0.9,
+                      'title': '想法',
+                      'summary': '想法',
+                      'missing_fields': [],
+                      'should_save': true,
+                      'todo_payload': null,
+                      'idea_payload': {
+                        'summary': '想法',
+                        'source_hint': 'DeepSeek',
+                        'tags': [],
+                      },
+                    })}') +
+                utf8.encode('data: [DONE]\n\n'),
+          ),
+          200,
+        );
+      }),
+    );
+
+    await client.captureTextStream(text: '记录一个想法').toList();
+
+    expect(
+        received.url.toString(), 'https://api.deepseek.com/chat/completions');
+    expect(received.headers['authorization'], 'Bearer deepseek-key');
+    expect(requestBody['model'], 'deepseek-v4-flash');
+  });
+
   test('streams visible assistant text and parses hidden capture json',
       () async {
     late Map<String, dynamic> requestBody;
@@ -113,4 +153,24 @@ class _FakeSettingsStore extends SettingsStore {
 
   @override
   Future<String> volcengineArkTextModel() async => 'doubao-test';
+
+  @override
+  Future<String?> voiceCaptureApiKey() => volcengineArkApiKey();
+
+  @override
+  Future<String> voiceCaptureBaseUrl() => volcengineArkBaseUrl();
+
+  @override
+  Future<String> voiceCaptureTextModel() => volcengineArkTextModel();
+}
+
+class _DeepSeekSettingsStore extends SettingsStore {
+  @override
+  Future<String?> voiceCaptureApiKey() async => 'deepseek-key';
+
+  @override
+  Future<String> voiceCaptureBaseUrl() async => 'https://api.deepseek.com';
+
+  @override
+  Future<String> voiceCaptureTextModel() async => 'deepseek-v4-flash';
 }

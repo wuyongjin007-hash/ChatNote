@@ -1,4 +1,4 @@
-enum CaptureIntentType { todo, idea, todoDelete, todoQuery, unclear }
+enum CaptureIntentType { todo, idea, ledger, todoDelete, todoQuery, unclear }
 
 CaptureIntentType captureIntentTypeFromJson(String value) {
   return CaptureIntentType.values.firstWhere(
@@ -60,8 +60,7 @@ class TodoPayload {
       endAt: endAt ?? this.endAt,
       location: clearLocation ? null : (location ?? this.location),
       topic: clearTopic ? null : (topic ?? this.topic),
-      reminderAt:
-          clearReminderAt ? null : (reminderAt ?? this.reminderAt),
+      reminderAt: clearReminderAt ? null : (reminderAt ?? this.reminderAt),
       status: status ?? this.status,
       durationMinutes: durationMinutes ?? this.durationMinutes,
     );
@@ -124,6 +123,38 @@ class IdeaPayload {
       'tags': tags,
     };
   }
+}
+
+class LedgerPayload {
+  const LedgerPayload({
+    required this.direction,
+    required this.amountCents,
+    required this.categoryCode,
+    required this.note,
+    required this.occurredAt,
+  });
+
+  final String direction;
+  final int amountCents;
+  final String categoryCode;
+  final String note;
+  final DateTime? occurredAt;
+
+  factory LedgerPayload.fromJson(Map<String, dynamic> json) => LedgerPayload(
+        direction: json['direction'] as String? ?? 'expense',
+        amountCents: json['amount_cents'] as int? ?? 0,
+        categoryCode: json['category_code'] as String? ?? 'other_expense',
+        note: json['note'] as String? ?? '',
+        occurredAt: _parseDate(json['occurred_at']),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'direction': direction,
+        'amount_cents': amountCents,
+        'category_code': categoryCode,
+        'note': note,
+        'occurred_at': occurredAt?.toIso8601String(),
+      };
 }
 
 enum TodoDeleteOperation { delete, clear }
@@ -224,6 +255,7 @@ class CaptureResult {
     required this.todoPayload,
     required this.ideaPayload,
     this.todoPayloads = const [],
+    this.ledgerPayload,
     this.todoDeletePayload,
     this.todoQueryPayload,
     this.interactionMode,
@@ -239,6 +271,7 @@ class CaptureResult {
   final bool shouldSave;
   final TodoPayload? todoPayload;
   final List<TodoPayload> todoPayloads;
+  final LedgerPayload? ledgerPayload;
   final IdeaPayload? ideaPayload;
   final TodoDeletePayload? todoDeletePayload;
   final TodoQueryPayload? todoQueryPayload;
@@ -275,6 +308,10 @@ class CaptureResult {
       todoPayload:
           todoPayload ?? (todoPayloads.isEmpty ? null : todoPayloads.first),
       todoPayloads: todoPayloads,
+      ledgerPayload: json['ledger_payload'] is Map<String, dynamic>
+          ? LedgerPayload.fromJson(
+              json['ledger_payload'] as Map<String, dynamic>)
+          : null,
       ideaPayload: json['idea_payload'] is Map<String, dynamic>
           ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
           : null,
@@ -307,11 +344,11 @@ class CaptureResult {
       'todo_payload': todoPayload?.toJson(),
       'todo_payloads':
           todoPayloads.map((todo) => todo.toJson()).toList(growable: false),
+      'ledger_payload': ledgerPayload?.toJson(),
       'idea_payload': ideaPayload?.toJson(),
       'todo_delete_payload': todoDeletePayload?.toJson(),
       'todo_query_payload': todoQueryPayload?.toJson(),
-      if (interactionMode != null)
-        'interaction_mode': interactionMode!.name,
+      if (interactionMode != null) 'interaction_mode': interactionMode!.name,
       'updated_fields': updatedFields,
     };
   }

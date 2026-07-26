@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'ai/volcengine_ark_capture_client.dart';
@@ -10,7 +12,8 @@ import 'audio/interaction_sound_service.dart';
 import 'data/app_database.dart';
 import 'data/entry_repository.dart';
 import 'domain/capture_conversation_agent.dart';
-import 'domain/local_capture_heuristics.dart';
+import 'local_ai/local_model_manager.dart';
+import 'local_ai/local_voice_runtime.dart';
 import 'settings/settings_store.dart';
 import 'speech/volcengine_ark_files_client.dart';
 import 'speech/volcengine_speech_service.dart';
@@ -34,44 +37,52 @@ final volcengineArkCaptureClientProvider =
   return VolcengineArkCaptureClient(ref.watch(settingsStoreProvider));
 });
 
-final localCaptureHeuristicsProvider = Provider<LocalCaptureHeuristics>((ref) {
-  return LocalCaptureHeuristics();
+final localModelManagerProvider = Provider<LocalModelManager>((ref) {
+  final manager = LocalModelManager();
+  unawaited(manager.initialize());
+  ref.onDispose(() => manager.dispose());
+  return manager;
+});
+
+final speechChannelProvider = Provider<LocalVoiceSpeechService>((ref) {
+  final service = LocalVoiceSpeechService(ref.watch(localModelManagerProvider));
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 final captureConversationAgentProvider =
     Provider<CaptureConversationAgent>((ref) {
   final arkClient = ref.watch(volcengineArkCaptureClientProvider);
+  final router = CloudCaptureRouter(
+    cloudCapture: (request) => arkClient.captureText(
+      text: request.text,
+      conversation: request.conversation,
+      pendingDraft: request.pendingDraft,
+      missingFields: request.missingFields,
+      isFollowUp: request.isFollowUp,
+    ),
+    cloudCaptureStream: (request) => arkClient
+        .captureTextStream(
+      text: request.text,
+      conversation: request.conversation,
+      pendingDraft: request.pendingDraft,
+      missingFields: request.missingFields,
+      isFollowUp: request.isFollowUp,
+    )
+        .map((event) {
+      if (event is ArkAssistantDelta) {
+        return CaptureAgentAssistantDelta(event.text);
+      }
+      if (event is ArkCaptureDone) {
+        return CaptureAgentDone(event.capture);
+      }
+      throw StateError('Unsupported Ark stream event: $event');
+    }),
+  );
   return CaptureConversationAgent(
-    heuristics: ref.watch(localCaptureHeuristicsProvider),
     repository: ref.watch(entryRepositoryProvider),
-    capture: (request) {
-      return arkClient.captureText(
-        text: request.text,
-        conversation: request.conversation,
-        pendingDraft: request.pendingDraft,
-        missingFields: request.missingFields,
-        isFollowUp: request.isFollowUp,
-      );
-    },
-    captureStream: (request) {
-      return arkClient
-          .captureTextStream(
-        text: request.text,
-        conversation: request.conversation,
-        pendingDraft: request.pendingDraft,
-        missingFields: request.missingFields,
-        isFollowUp: request.isFollowUp,
-      )
-          .map((event) {
-        if (event is ArkAssistantDelta) {
-          return CaptureAgentAssistantDelta(event.text);
-        }
-        if (event is ArkCaptureDone) {
-          return CaptureAgentDone(event.capture);
-        }
-        throw StateError('Unsupported Ark stream event: $event');
-      });
-    },
+    capture: router.capture,
+    captureStream: router.captureStream,
   );
 });
 
@@ -80,7 +91,7 @@ final volcengineArkFilesClientProvider =
   return VolcengineArkFilesClient(ref.watch(settingsStoreProvider));
 });
 
-final speechChannelProvider = Provider<VolcengineSpeechService>((ref) {
+final cloudSpeechChannelProvider = Provider<VolcengineSpeechService>((ref) {
   return VolcengineSpeechService(ref.watch(volcengineArkFilesClientProvider));
 });
 

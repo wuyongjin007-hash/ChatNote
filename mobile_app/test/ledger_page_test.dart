@@ -15,7 +15,7 @@ void main() {
       id: 'expense',
       direction: 'expense',
       amountCents: 2500,
-      categoryCode: 'food',
+      categoryCode: 'dining',
       note: '午饭',
       occurredAt: DateTime(now.year, now.month, 12, 12),
       source: 'typedText',
@@ -51,5 +51,13 @@ void main() {
     expect(find.text('编辑账目'), findsOneWidget);
     expect(find.byKey(const Key('ledger-edit-save')), findsOneWidget);
     expect(find.byKey(const Key('ledger-edit-delete')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ledger-edit-delete')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('ledger-delete-confirmation-dialog')),
+      findsOneWidget,
+    );
   });
 }

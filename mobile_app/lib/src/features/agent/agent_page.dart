@@ -8,6 +8,7 @@ import '../../agent/agent_models.dart';
 import '../../agent/agent_runtime.dart';
 import '../../agent/agent_session_controller.dart';
 import '../../providers.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/unified_input_bar.dart';
 
@@ -144,7 +145,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       _recordingWillCancel = false;
     });
     try {
-      await ref.read(speechChannelProvider).startRecognition();
+      await ref.read(cloudSpeechChannelProvider).startRecognition();
     } catch (error) {
       if (!mounted) return;
       setState(() => _recording = false);
@@ -162,7 +163,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   Future<void> _stopVoice() async {
     if (!_recording) return;
     if (_recordingWillCancel) {
-      await ref.read(speechChannelProvider).cancelRecognition();
+      await ref.read(cloudSpeechChannelProvider).cancelRecognition();
       if (!mounted) return;
       setState(() {
         _recording = false;
@@ -177,7 +178,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     });
     try {
       unawaited(ref.read(interactionSoundServiceProvider).playXiu());
-      final text = await ref.read(speechChannelProvider).stopRecognition();
+      final text = await ref.read(cloudSpeechChannelProvider).stopRecognition();
       _textController.text = text.trim();
       await _send();
     } catch (error) {
@@ -268,8 +269,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
             ],
           ),
         ),
-        if (_recording)
-          _RecordingOverlay(willCancel: _recordingWillCancel),
+        if (_recording) _RecordingOverlay(willCancel: _recordingWillCancel),
       ],
     );
   }
@@ -306,9 +306,9 @@ class _MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: const BoxConstraints(maxWidth: 320),
         decoration: BoxDecoration(
-          color: message.isUser ? const Color(0xffdce8ff) : Colors.white,
+          color: message.isUser ? AppColors.chatUserSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xffe2e6ee)),
+          border: Border.all(color: AppColors.chatBorder),
         ),
         child: Text(message.text),
       ),
@@ -329,8 +329,12 @@ class _ConfirmationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final preview = pending.preview;
-    return Card(
-      color: const Color(0xfffff8e5),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.warningSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accentBorder),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -397,7 +401,8 @@ class _RecordingOverlay extends StatelessWidget {
                     height: 74,
                     width: 74,
                     decoration: BoxDecoration(
-                      color: willCancel ? Colors.white : const Color(0xff087cff),
+                      color:
+                          willCancel ? Colors.white : const Color(0xff087cff),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -470,8 +475,8 @@ class _AnimatedWaveformState extends State<_AnimatedWaveform>
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: List.generate(42, (index) {
-            final wave = math.sin(
-                (_waveController.value * math.pi * 2) + index * 0.42);
+            final wave =
+                math.sin((_waveController.value * math.pi * 2) + index * 0.42);
             final height = 8 + (wave.abs() * 22) + (index % 5 == 0 ? 8 : 0);
             return Container(
               width: 3,

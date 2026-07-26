@@ -16,8 +16,11 @@ class CaptureDraftMerger {
       return incoming;
     }
 
-    final isCorrection =
-        incoming.interactionMode == InteractionMode.correction;
+    if (incoming.intentType == CaptureIntentType.ledger) {
+      return incoming;
+    }
+
+    final isCorrection = incoming.interactionMode == InteractionMode.correction;
     final updatedFields = incoming.updatedFields.toSet();
     final isSupplement = incoming.interactionMode == InteractionMode.supplement;
 
@@ -97,8 +100,7 @@ class CaptureDraftMerger {
       title: previous.title,
       summary: previous.summary,
       missingFields: previous.missingFields,
-      followUpQuestion:
-          incoming.followUpQuestion ?? previous.followUpQuestion,
+      followUpQuestion: incoming.followUpQuestion ?? previous.followUpQuestion,
       shouldSave: previous.shouldSave,
       todoPayload: previous.todoPayload,
       todoPayloads: previous.todoPayloads,
@@ -199,7 +201,10 @@ class CaptureDraftMerger {
     required bool fieldUpdated,
     String? defaultValue,
   }) {
-    if (isCorrection && fieldUpdated && incoming != null && incoming.isNotEmpty) {
+    if (isCorrection &&
+        fieldUpdated &&
+        incoming != null &&
+        incoming.isNotEmpty) {
       return incoming;
     }
 

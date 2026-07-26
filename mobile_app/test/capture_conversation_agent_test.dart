@@ -1,13 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_idea_capture/src/domain/capture_conversation_agent.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
-import 'package:local_idea_capture/src/domain/local_capture_heuristics.dart';
 
 void main() {
   test('streams assistant deltas before completing the capture turn', () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
-      heuristics: LocalCaptureHeuristics(),
       capture: (request) async =>
           throw StateError('non-streaming path should not be used'),
       captureStream: (request) {
@@ -44,7 +42,6 @@ void main() {
       () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
-      heuristics: LocalCaptureHeuristics(),
       capture: (request) async =>
           throw StateError('non-streaming path should not be used'),
       captureStream: (request) {
@@ -95,7 +92,6 @@ void main() {
       () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
-      heuristics: LocalCaptureHeuristics(),
       capture: (request) async {
         requests.add(request);
         if (requests.length == 1) {
@@ -134,7 +130,6 @@ void main() {
   test('reset clears short-term memory before the next capture', () async {
     final requests = <CaptureAgentRequest>[];
     final agent = CaptureConversationAgent(
-      heuristics: LocalCaptureHeuristics(),
       capture: (request) async {
         requests.add(request);
         return _todoDraft(
@@ -152,6 +147,43 @@ void main() {
     expect(requests.last.isFollowUp, isFalse);
     expect(requests.last.pendingDraft, isNull);
     expect(requests.last.conversation, isEmpty);
+  });
+
+  test('sends a new standalone todo to Ark even while a draft is active',
+      () async {
+    var cloudCalls = 0;
+    final router = CloudCaptureRouter(
+      cloudCapture: (_) async {
+        cloudCalls++;
+        return _todoDraft(
+          title: '去河边钓鱼',
+          missingFields: const [],
+          shouldSave: true,
+          startAt: DateTime(2026, 7, 15, 8),
+        );
+      },
+      cloudCaptureStream: (_) async* {
+        cloudCalls++;
+        yield CaptureAgentDone(_todoDraft(
+          title: cloudCalls == 1 ? '去办公室开会' : '去河边钓鱼',
+          missingFields: cloudCalls == 1 ? const ['location'] : const [],
+          shouldSave: cloudCalls != 1,
+          startAt: cloudCalls == 1 ? null : DateTime(2026, 7, 15, 8),
+        ));
+      },
+    );
+    final agent = CaptureConversationAgent(
+      capture: router.capture,
+      captureStream: router.captureStream,
+    );
+
+    await agent.submitTextStream('明天上午10点钟去办公室开会。').drain<void>();
+    final secondEvents = await agent.submitTextStream('明天上午8点钟去河边钓鱼。').toList();
+    final secondTurn = secondEvents.whereType<CaptureAgentTurnDone>().single;
+
+    expect(cloudCalls, 2);
+    expect(secondTurn.turn.isFollowUp, isTrue);
+    expect(secondTurn.turn.capture.title, '去河边钓鱼');
   });
 }
 

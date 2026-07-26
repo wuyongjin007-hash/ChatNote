@@ -105,10 +105,12 @@ class _TodoListState extends ConsumerState<_TodoList> {
   static const _futureWindow = Duration(days: 14);
   static const _pastWindow = Duration(days: 7);
   static const _prefetchExtent = 800.0;
+  static const _deleteAnimationDuration = Duration(milliseconds: 420);
 
   final _scrollController = ScrollController();
   final _todos = <EntryListItem>[];
   final _unscheduledTodos = <EntryListItem>[];
+  final _deletingTodoIds = <String>{};
   late DateTime _from;
   late DateTime _to;
   var _isInitialLoading = true;
@@ -269,6 +271,20 @@ class _TodoListState extends ConsumerState<_TodoList> {
     });
   }
 
+  Future<void> _deleteTodo(String id) async {
+    if (_deletingTodoIds.contains(id)) return;
+    setState(() => _deletingTodoIds.add(id));
+
+    await Future<void>.delayed(_deleteAnimationDuration);
+    await ref.read(entryRepositoryProvider).deleteTodos([id]);
+    if (!mounted) return;
+    setState(() {
+      _deletingTodoIds.remove(id);
+      _todos.removeWhere((todo) => todo.id == id);
+      _unscheduledTodos.removeWhere((todo) => todo.id == id);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isInitialLoading) {
@@ -324,10 +340,43 @@ class _TodoListState extends ConsumerState<_TodoList> {
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-            _TodoItemRow(:final todo) => _TodoCard(
-                key: ValueKey(todo.id),
-                todo: todo,
-                onToggle: () => _toggleTodo(todo),
+            _TodoItemRow(:final todo) => _DeleteAnimation(
+                key: ValueKey('todo-delete-animation-${todo.id}'),
+                isDeleting: _deletingTodoIds.contains(todo.id),
+                child: Slidable(
+                  key: Key('todo-card-${todo.id}'),
+                  groupTag: 'todos',
+                  endActionPane: ActionPane(
+                    motion: const ScrollMotion(),
+                    extentRatio: 0.22,
+                    children: [
+                      CustomSlidableAction(
+                        key: const Key('todo-delete-action'),
+                        onPressed: (_) => _deleteTodo(todo.id),
+                        padding: const EdgeInsets.only(left: 10),
+                        backgroundColor: Colors.transparent,
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: const BoxDecoration(
+                            color: Color(0xffff3b30),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  child: _TodoCard(
+                    key: ValueKey(todo.id),
+                    todo: todo,
+                    onToggle: () => _toggleTodo(todo),
+                  ),
+                ),
               ),
             _TodoEmptyTodayRow() => Card(
                 color: AppColors.surface,
@@ -547,7 +596,7 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
                 );
               }
               final idea = _ideas[index];
-              return _IdeaDeleteAnimation(
+              return _DeleteAnimation(
                 key: ValueKey('idea-delete-animation-${idea.id}'),
                 isDeleting: _deletingIdeaIds.contains(idea.id),
                 child: Slidable(
@@ -671,8 +720,8 @@ class _IdeaListState extends ConsumerState<_IdeaList> {
   }
 }
 
-class _IdeaDeleteAnimation extends StatelessWidget {
-  const _IdeaDeleteAnimation({
+class _DeleteAnimation extends StatelessWidget {
+  const _DeleteAnimation({
     super.key,
     required this.isDeleting,
     required this.child,

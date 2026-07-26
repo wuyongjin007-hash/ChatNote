@@ -13,6 +13,8 @@ class AppColors {
   static const primary = Color(0xff3478e5);
   static const primaryDark = Color(0xff2865c7);
   static const primarySoft = Color(0xffeaf2ff);
+  static const chatUserSoft = Color(0xffdce8ff);
+  static const chatBorder = Color(0xffe2e6ee);
   static const accentLine = Color(0xff8dbcf4);
   static const accent = Color(0xffc8973f);
   static const accentSoft = Color(0xfffff7e8);

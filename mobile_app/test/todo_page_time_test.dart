@@ -207,6 +207,46 @@ void main() {
     );
     expect(restored.single.status, 'pending');
   });
+
+  testWidgets('reveals the idea-style delete action when a todo is swiped',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final now = DateTime.now();
+    await database.saveTodo(
+      capture: _todoCapture(
+        title: 'Delete by swipe',
+        startAt: DateTime(now.year, now.month, now.day, 10),
+        endAt: DateTime(now.year, now.month, now.day, 10, 30),
+      ),
+      rawText: 'delete by swipe',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: Scaffold(body: TodoQueryPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('Delete by swipe'), const Offset(-240, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('todo-delete-action')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('todo-delete-action')));
+    await tester.pump(const Duration(milliseconds: 420));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete by swipe'), findsNothing);
+    expect(
+      await database.loadTodos(
+        DateTime(now.year, now.month, now.day),
+        DateTime(now.year, now.month, now.day + 1),
+      ),
+      isEmpty,
+    );
+  });
 }
 
 CaptureResult _todoCapture({

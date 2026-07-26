@@ -19,14 +19,14 @@ class VolcengineArkCaptureClient {
     List<String> missingFields = const [],
     bool isFollowUp = false,
   }) async* {
-    final apiKey = await _settings.volcengineArkApiKey();
+    final apiKey = await _settings.voiceCaptureApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      throw const VolcengineArkCaptureException('请先在设置页填写火山方舟 API Key');
+      throw const VolcengineArkCaptureException('请先在设置页填写语音记录使用的云端 API Key');
     }
 
     final baseUrl =
-        (await _settings.volcengineArkBaseUrl()).replaceAll(RegExp(r'/$'), '');
-    final model = await _settings.volcengineArkTextModel();
+        (await _settings.voiceCaptureBaseUrl()).replaceAll(RegExp(r'/$'), '');
+    final model = await _settings.voiceCaptureTextModel();
     final request = http.Request('POST', Uri.parse('$baseUrl/chat/completions'))
       ..headers.addAll({
         'authorization': 'Bearer $apiKey',
@@ -87,14 +87,14 @@ class VolcengineArkCaptureClient {
     List<String> missingFields = const [],
     bool isFollowUp = false,
   }) async {
-    final apiKey = await _settings.volcengineArkApiKey();
+    final apiKey = await _settings.voiceCaptureApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      throw const VolcengineArkCaptureException('请先在设置页填写火山方舟 API Key');
+      throw const VolcengineArkCaptureException('请先在设置页填写语音记录使用的云端 API Key');
     }
 
     final baseUrl =
-        (await _settings.volcengineArkBaseUrl()).replaceAll(RegExp(r'/$'), '');
-    final model = await _settings.volcengineArkTextModel();
+        (await _settings.voiceCaptureBaseUrl()).replaceAll(RegExp(r'/$'), '');
+    final model = await _settings.voiceCaptureTextModel();
 
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/chat/completions'),
@@ -155,7 +155,8 @@ class VolcengineArkCaptureClient {
       'messages': [
         {
           'role': 'system',
-          'content': stream ? _streamSystemPrompt : _systemPrompt
+          'content':
+              '${stream ? _streamSystemPrompt : _systemPrompt}\n$_ledgerCapturePrompt'
         },
         {
           'role': 'user',
@@ -258,6 +259,16 @@ String _stripCodeFenceStatic(String text) {
 }
 
 const _captureJsonSeparator = '<<<CAPTURE_JSON>>>';
+
+const _ledgerCapturePrompt = '''
+Also support intent_type "ledger" for income and expense records. For a ledger
+record, set should_save true only when direction, amount_cents and category_code
+are known. Return ledger_payload with direction (income or expense),
+amount_cents (integer cents), category_code, note and occurred_at (ISO-8601).
+Use food for meals, transport for travel, shopping for purchases; default to
+other_expense. Include ledger_payload in the JSON output and set unrelated
+payloads to null.
+''';
 
 const _systemPrompt = '''
 你是一个 Android 本地想法记录 App 的结构化录入智能体。你只能返回合法 JSON，不要返回 Markdown、代码块或解释。

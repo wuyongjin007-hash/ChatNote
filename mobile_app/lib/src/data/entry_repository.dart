@@ -1,5 +1,6 @@
 import '../domain/capture_models.dart';
 import '../domain/conflict_detector.dart';
+import 'package:uuid/uuid.dart';
 import 'app_database.dart';
 
 class EntryRepository {
@@ -36,10 +37,31 @@ class EntryRepository {
       CaptureIntentType.idea => _database
           .saveIdea(capture: capture, rawText: rawText)
           .then((id) => [id]),
+      CaptureIntentType.ledger => _saveLedger(capture, rawText),
       CaptureIntentType.todoDelete => throw StateError('删除请求不能作为新记录保存'),
       CaptureIntentType.todoQuery => throw StateError('查询请求不能作为新记录保存'),
       CaptureIntentType.unclear => throw StateError('无法保存未明确分类的记录'),
     };
+  }
+
+  Future<List<String>> _saveLedger(
+      CaptureResult capture, String rawText) async {
+    final ledger = capture.ledgerPayload;
+    if (ledger == null || ledger.amountCents <= 0) {
+      throw ArgumentError('ledger_payload with a positive amount is required');
+    }
+    final id = const Uuid().v4();
+    await _database.createLedgerTransaction(
+      id: id,
+      direction: ledger.direction,
+      amountCents: ledger.amountCents,
+      categoryCode: ledger.categoryCode,
+      note: ledger.note,
+      occurredAt: ledger.occurredAt ?? DateTime.now(),
+      source: 'voiceCapture',
+      rawText: rawText,
+    );
+    return [id];
   }
 
   Future<List<EntryListItem>> queryTodos(TodoQueryPayload payload) {

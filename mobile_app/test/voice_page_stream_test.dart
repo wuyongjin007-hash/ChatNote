@@ -7,8 +7,8 @@ import 'package:local_idea_capture/src/data/app_database.dart';
 import 'package:local_idea_capture/src/domain/capture_conversation_agent.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
 import 'package:local_idea_capture/src/features/voice/voice_page.dart';
+import 'package:local_idea_capture/src/local_ai/local_voice_runtime.dart';
 import 'package:local_idea_capture/src/providers.dart';
-import 'package:local_idea_capture/src/speech/volcengine_speech_service.dart';
 import 'package:local_idea_capture/src/theme/app_colors.dart';
 
 void main() {
@@ -139,6 +139,36 @@ void main() {
     expect(draftDecoration.color, AppColors.surface);
     expect(draftDecoration.border, isNotNull);
     expect(find.byKey(const Key('voice-draft-icon')), findsOneWidget);
+  });
+
+  testWidgets('renders the voice user message with the smart-record light blue',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider
+              .overrideWithValue(_FakeCaptureConversationAgent()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'light blue bubble');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+
+    final bubble = tester.widget<Container>(
+      find.byKey(const Key('voice-user-message-bubble')),
+    );
+    final decoration = bubble.decoration as BoxDecoration;
+    expect(decoration.color, const Color(0xffdce8ff));
   });
 
   testWidgets(
@@ -609,7 +639,7 @@ class _QueryThenDeleteCaptureConversationAgent
   }
 }
 
-class _FakeSpeechService implements VolcengineSpeechService {
+class _FakeSpeechService implements LocalVoiceSpeechService {
   _FakeSpeechService(this.result,
       {this.delay = const Duration(milliseconds: 10)});
 
@@ -630,6 +660,15 @@ class _FakeSpeechService implements VolcengineSpeechService {
   Future<void> cancelRecognition() async {
     cancelled = true;
   }
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<void> warmUp() async {}
+
+  @override
+  Future<void> prepare() async {}
 }
 
 CaptureResult _todoDraft() {

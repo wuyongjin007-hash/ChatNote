@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import '../data/entry_repository.dart';
 import 'capture_draft_merger.dart';
 import 'capture_models.dart';
-import 'local_capture_heuristics.dart';
 
 typedef CaptureAgentCall = Future<CaptureResult> Function(
     CaptureAgentRequest request);
@@ -62,10 +62,38 @@ class CaptureAgentTurnDone extends CaptureAgentStreamEvent {
   final CaptureTurn turn;
 }
 
-class CaptureAgentFallback extends CaptureAgentStreamEvent {
-  const CaptureAgentFallback(this.turn);
+class CaptureAgentRoutingStatus extends CaptureAgentStreamEvent {
+  const CaptureAgentRoutingStatus(this.message);
 
-  final CaptureTurn turn;
+  final String message;
+}
+
+class CaptureAgentFailure extends CaptureAgentStreamEvent {
+  const CaptureAgentFailure(this.message);
+
+  final String message;
+}
+
+/// Sends every voice-record text request to Ark. Local processing ends after
+/// speech-to-text conversion; structured capture is always cloud-owned.
+class CloudCaptureRouter {
+  CloudCaptureRouter({
+    required CaptureAgentCall cloudCapture,
+    required CaptureAgentStreamCall cloudCaptureStream,
+  })  : _cloudCapture = cloudCapture,
+        _cloudCaptureStream = cloudCaptureStream;
+
+  final CaptureAgentCall _cloudCapture;
+  final CaptureAgentStreamCall _cloudCaptureStream;
+
+  Future<CaptureResult> capture(CaptureAgentRequest request) =>
+      _cloudCapture(request);
+
+  Stream<CaptureAgentStreamEvent> captureStream(
+      CaptureAgentRequest request) async* {
+    yield const CaptureAgentRoutingStatus('正在云端整理…');
+    yield* _cloudCaptureStream(request);
+  }
 }
 
 class ConversationMessage {
@@ -114,17 +142,14 @@ class CaptureConversationAgent {
   CaptureConversationAgent({
     required CaptureAgentCall capture,
     CaptureAgentStreamCall? captureStream,
-    required LocalCaptureHeuristics heuristics,
     EntryRepository? repository,
   })  : _capture = capture,
         _captureStream = captureStream,
-        _heuristics = heuristics,
         _repository = repository,
         _sessionId = _newSessionId();
 
   final CaptureAgentCall _capture;
   final CaptureAgentStreamCall? _captureStream;
-  final LocalCaptureHeuristics _heuristics;
   final EntryRepository? _repository;
   final CaptureDraftMerger _merger = const CaptureDraftMerger();
 
@@ -185,10 +210,11 @@ class CaptureConversationAgent {
 
   Future<CaptureTurn> submitText(String text) async {
     final normalized = text.trim();
-    final isFollowUp = _hasPendingDraft;
+    var isFollowUp = _hasPendingDraft;
 
     if (_isNewTopicRequest(normalized)) {
       reset();
+      isFollowUp = false;
     }
 
     final request = CaptureAgentRequest(
@@ -200,14 +226,7 @@ class CaptureConversationAgent {
       isFollowUp: isFollowUp,
     );
 
-    CaptureResult capture;
-    var usedFallback = false;
-    try {
-      capture = await _capture(request);
-    } catch (_) {
-      capture = _heuristics.extract(normalized);
-      usedFallback = true;
-    }
+    final capture = await _capture(request);
 
     if (capture.intentType == CaptureIntentType.todoQuery) {
       _storeMemory(normalized, capture.followUpQuestion ?? capture.summary);
@@ -215,7 +234,7 @@ class CaptureConversationAgent {
         capture: capture,
         rawTranscript: normalized,
         isFollowUp: false,
-        usedFallback: usedFallback,
+        usedFallback: false,
       );
     }
 
@@ -224,7 +243,7 @@ class CaptureConversationAgent {
       normalized: normalized,
       capture: merged,
       isFollowUp: isFollowUp,
-      usedFallback: usedFallback,
+      usedFallback: false,
       assistantText: merged.followUpQuestion ?? merged.summary,
     );
     await _persistSession('active');
@@ -233,10 +252,11 @@ class CaptureConversationAgent {
 
   Stream<CaptureAgentStreamEvent> submitTextStream(String text) async* {
     final normalized = text.trim();
-    final isFollowUp = _hasPendingDraft;
+    var isFollowUp = _hasPendingDraft;
 
     if (_isNewTopicRequest(normalized)) {
       reset();
+      isFollowUp = false;
     }
 
     final request = CaptureAgentRequest(
@@ -259,6 +279,8 @@ class CaptureConversationAgent {
         await for (final event in stream(request)) {
           if (event is CaptureAgentAssistantDelta) {
             assistantBuffer.write(event.text);
+            yield event;
+          } else if (event is CaptureAgentRoutingStatus) {
             yield event;
           } else if (event is CaptureAgentDone) {
             streamedCapture = event.capture;
@@ -294,29 +316,15 @@ class CaptureConversationAgent {
         assistantText: assistantBuffer.toString(),
       );
       yield CaptureAgentTurnDone(turn);
-    } catch (_) {
-      final capture = _heuristics.extract(normalized);
-
-      if (capture.intentType == CaptureIntentType.todoQuery) {
-        _storeMemory(normalized, capture.followUpQuestion ?? capture.summary);
-        yield CaptureAgentFallback(CaptureTurn(
-          capture: capture,
-          rawTranscript: normalized,
-          isFollowUp: false,
-          usedFallback: true,
-        ));
-        return;
-      }
-
-      final merged = _resolveCapture(capture, isFollowUp);
-      final turn = _finishTurn(
-        normalized: normalized,
-        capture: merged,
-        isFollowUp: isFollowUp,
-        usedFallback: true,
-        assistantText: capture.followUpQuestion ?? capture.summary,
+    } catch (error, stackTrace) {
+      developer.log(
+        'Cloud capture failed: $error',
+        name: 'CaptureConversationAgent',
+        stackTrace: stackTrace,
       );
-      yield CaptureAgentFallback(turn);
+      yield const CaptureAgentFailure(
+        '云端整理失败，请检查网络和方舟配置后重试；已保留本次识别文字。',
+      );
     }
   }
 

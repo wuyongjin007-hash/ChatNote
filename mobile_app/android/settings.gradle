@@ -27,3 +27,14 @@ plugins {
 }
 
 include ":app"
+
+// Some Android plugins declare their own `buildscript` repositories. Register
+// domestic mirrors before every subproject is evaluated so those plugins do not
+// need to reach Maven Central directly during a China-network build.
+gradle.beforeProject { project ->
+    project.buildscript.repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    }
+}

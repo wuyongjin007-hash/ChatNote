@@ -21,6 +21,7 @@ class VoicePage extends ConsumerStatefulWidget {
 }
 
 class _VoicePageState extends ConsumerState<VoicePage> {
+  static const _cloudWorkingText = '正在云端整理…';
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _messages = <_ChatMessage>[];
@@ -47,6 +48,13 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     _textController.addListener(_refreshTextInput);
     _restoreDisplayFromAgent();
     Future<void>.microtask(_tryRestoreSession);
+    Future<void>.microtask(() async {
+      try {
+        await ref.read(speechChannelProvider).prepare();
+      } catch (_) {
+        // startRecognition will surface permission and model-download errors.
+      }
+    });
   }
 
   void _restoreDisplayFromAgent() {
@@ -204,7 +212,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
               ConversationMessage(isUser: true, text: text),
             );
       }
-      _messages.add(const _ChatMessage.assistant(''));
+      _messages.add(const _ChatMessage.assistant(_cloudWorkingText));
       assistantMessageIndex = _messages.length - 1;
     });
     _scrollToBottom();
@@ -213,11 +221,18 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         in ref.read(captureConversationAgentProvider).submitTextStream(text)) {
       if (event is CaptureAgentAssistantDelta) {
         _appendAssistantDelta(assistantMessageIndex, event.text);
+      } else if (event is CaptureAgentRoutingStatus) {
+        _replaceMessage(
+            assistantMessageIndex, _ChatMessage.assistant(event.message));
       } else if (event is CaptureAgentTurnDone) {
         await _applyCompletedTurn(event.turn, assistantMessageIndex);
-      } else if (event is CaptureAgentFallback) {
-        _appendAssistantDelta(assistantMessageIndex, '火山方舟文本模型暂不可用，已使用本地兜底整理。');
-        await _applyCompletedTurn(event.turn, assistantMessageIndex);
+      } else if (event is CaptureAgentFailure) {
+        _replaceMessage(
+            assistantMessageIndex, _ChatMessage.assistant(event.message));
+        setState(() {
+          _aiBusy = false;
+          _voiceStage = _VoiceStage.idle;
+        });
       }
     }
   }
@@ -336,7 +351,9 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     }
     setState(() {
       final message = _messages[index];
-      _messages[index] = message.copyWith(text: message.text + delta);
+      _messages[index] = message.copyWith(
+        text: message.text == _cloudWorkingText ? delta : message.text + delta,
+      );
     });
     _scrollToBottom();
   }
@@ -425,7 +442,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
         _deleteMatches = matches;
         _lastQueryMatches = const [];
         agent.clearLastQueryTodoIds();
-        if (_messages[assistantMessageIndex].text.trim().isEmpty) {
+        if (_messages[assistantMessageIndex].text.trim().isEmpty ||
+            _messages[assistantMessageIndex].text == _cloudWorkingText) {
           final deleteText = matches.isEmpty
               ? '没有找到符合条件的待办。'
               : '找到了 ${matches.length} 条待办，请确认是否删除。';
@@ -462,7 +480,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       _draft = capture;
       _rawText = turn.rawTranscript;
       _conflicts = conflicts;
-      if (_messages[assistantMessageIndex].text.trim().isEmpty) {
+      if (_messages[assistantMessageIndex].text.trim().isEmpty ||
+          _messages[assistantMessageIndex].text == _cloudWorkingText) {
         _messages[assistantMessageIndex] =
             _messages[assistantMessageIndex].copyWith(
           text: capture.followUpQuestion ?? '我整理好了，请确认是否保存。',
@@ -915,6 +934,7 @@ class _DraftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTodo = draft.intentType == CaptureIntentType.todo;
+    final isLedger = draft.intentType == CaptureIntentType.ledger;
     final todoPayloads = draft.effectiveTodoPayloads;
     final isBatchTodo = isTodo && todoPayloads.length > 1;
     return Container(
@@ -948,7 +968,11 @@ class _DraftCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    isTodo ? Icons.event_available : Icons.lightbulb_outline,
+                    isTodo
+                        ? Icons.event_available
+                        : isLedger
+                            ? Icons.receipt_long_outlined
+                            : Icons.lightbulb_outline,
                     size: 20,
                     color: AppColors.accent,
                   ),
@@ -1110,14 +1134,17 @@ class _ChatBubble extends StatelessWidget {
         _ChatMessageKind.assistantTyping =>
           const _TypingDotsBubble(isUser: false),
         _ChatMessageKind.text => Container(
+            key: message.isUser ? const Key('voice-user-message-bubble') : null,
             margin: const EdgeInsets.symmetric(vertical: 5),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             constraints: const BoxConstraints(maxWidth: 310),
             decoration: BoxDecoration(
-              color: message.isUser ? AppColors.primary : AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border:
-                  message.isUser ? null : Border.all(color: AppColors.border),
+              color:
+                  message.isUser ? AppColors.chatUserSoft : AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: message.isUser ? AppColors.chatBorder : AppColors.border,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.035),
@@ -1128,8 +1155,8 @@ class _ChatBubble extends StatelessWidget {
             ),
             child: Text(
               message.text,
-              style: TextStyle(
-                color: message.isUser ? Colors.white : const Color(0xff1f2937),
+              style: const TextStyle(
+                color: Color(0xff1f2937),
                 fontSize: 15,
                 height: 1.35,
               ),
@@ -1529,15 +1556,19 @@ class _TypingDotsBubbleState extends State<_TypingDotsBubble>
 
   @override
   Widget build(BuildContext context) {
-    final background = widget.isUser ? AppColors.primary : AppColors.surface;
-    final dotColor = widget.isUser ? Colors.white : AppColors.textMuted;
+    final background =
+        widget.isUser ? AppColors.chatUserSoft : AppColors.surface;
+    final dotColor =
+        widget.isUser ? AppColors.primaryDark : AppColors.textMuted;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: widget.isUser ? null : Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: widget.isUser ? AppColors.chatBorder : AppColors.border,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
