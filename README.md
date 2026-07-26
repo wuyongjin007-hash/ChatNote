@@ -1,4 +1,4 @@
-# 🎙️ Idea — 本地 AI 语音想法记录
+# 🎙️ ChatNote — 本地 AI 语音想法记录
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)
 ![Dart](https://img.shields.io/badge/Dart-3.4+-0175C2?logo=dart)
@@ -19,7 +19,7 @@
 
 ---
 
-## ✨ Idea —— 你的语音灵感捕手
+## ✨ ChatNote —— 你的语音灵感捕手
 
 一个**纯本地存储**、**AI 驱动**的语音想法记录 App。支持待办、想法、记账三大场景，用对话式 AI 帮你把碎片信息瞬间结构化。
 
