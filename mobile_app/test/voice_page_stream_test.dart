@@ -141,6 +141,38 @@ void main() {
     expect(find.byKey(const Key('voice-draft-icon')), findsOneWidget);
   });
 
+  testWidgets('does not offer a save action for an incomplete draft',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          captureConversationAgentProvider.overrideWithValue(
+            _FakeCaptureConversationAgent(capture: _incompleteIdeaDraft()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: VoicePage())),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('voice-mode-toggle-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'incomplete idea');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('继续补充'), findsOneWidget);
+    expect(find.text('保存'), findsNothing);
+    final action = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '继续补充'),
+    );
+    expect(action.onPressed, isNull);
+  });
+
   testWidgets('renders the voice user message with the smart-record light blue',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -689,6 +721,24 @@ CaptureResult _todoDraft() {
       status: 'pending',
     ),
     ideaPayload: null,
+  );
+}
+
+CaptureResult _incompleteIdeaDraft() {
+  return const CaptureResult(
+    intentType: CaptureIntentType.idea,
+    confidence: 0.92,
+    title: '待补充的想法',
+    summary: '需要更多上下文后才能保存。',
+    missingFields: ['summary'],
+    followUpQuestion: '请补充想法内容。',
+    shouldSave: false,
+    todoPayload: null,
+    ideaPayload: IdeaPayload(
+      summary: '',
+      sourceHint: null,
+      tags: [],
+    ),
   );
 }
 

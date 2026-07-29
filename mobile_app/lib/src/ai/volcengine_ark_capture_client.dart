@@ -301,6 +301,9 @@ const _systemPrompt = '''
 - 时长修改后根据原有 start_at 重新计算 end_at。
 - 只缺少标题或时间时才列入 missing_fields 并追问，缺少地点、主题、提醒不视为缺失。
 
+## 想法规则
+idea 的 title 必须是 8–18 个中文字符的主题概括：简洁表达核心观点，不要使用“想法”“灵感”“笔记”等泛化词，不要照抄整段正文。idea_payload.summary 保存完整整理后的想法内容。只要 idea_payload.summary 非空，你必须自动生成 title，should_save 设为 true，missing_fields 返回空数组，follow_up_question 为 null；不得将 title 放入 missing_fields，也不得要求用户自行概括标题。
+
 ## 查询规则
 查询本地待办归类为 todoQuery。提取查询条件到 todo_query_payload：
 - date_from、date_to：日期范围（ISO-8601），未指定日期默认今天起7天
@@ -360,6 +363,9 @@ const _streamSystemPrompt = '''
 - 会议类默认 60 分钟，普通事项默认 30 分钟，用户明确指定时长后覆盖默认值并重新计算 end_at。
 - 时长修改后根据原有 start_at 重新计算 end_at。
 - 只缺少标题或时间时才列入 missing_fields 并追问，缺少地点、主题、提醒不视为缺失。
+
+## 想法规则
+idea 的 title 必须是 8–18 个中文字符的主题概括：简洁表达核心观点，不要使用“想法”“灵感”“笔记”等泛化词，不要照抄整段正文。idea_payload.summary 保存完整整理后的想法内容。只要 idea_payload.summary 非空，你必须自动生成 title，should_save 设为 true，missing_fields 返回空数组，follow_up_question 为 null；不得将 title 放入 missing_fields，也不得要求用户自行概括标题。
 
 ## 查询规则
 查询本地待办归类为 todoQuery。提取查询条件到 todo_query_payload：

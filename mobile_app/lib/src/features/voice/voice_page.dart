@@ -937,6 +937,9 @@ class _DraftCard extends StatelessWidget {
     final isLedger = draft.intentType == CaptureIntentType.ledger;
     final todoPayloads = draft.effectiveTodoPayloads;
     final isBatchTodo = isTodo && todoPayloads.length > 1;
+    final hasRequiredMissingFields = draft.missingFields.any((field) =>
+        field != 'location' && field != 'topic' && field != 'reminder_at');
+    final canSave = draft.shouldSave && !hasRequiredMissingFields;
     return Container(
       key: const Key('voice-draft-card'),
       margin: const EdgeInsets.symmetric(vertical: 12),
@@ -1103,8 +1106,8 @@ class _DraftCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed: onSave,
-                      child: const Text('保存'),
+                      onPressed: canSave ? onSave : null,
+                      child: Text(canSave ? '保存' : '继续补充'),
                     ),
                   ),
                 ],

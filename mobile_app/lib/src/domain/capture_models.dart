@@ -287,6 +287,8 @@ class CaptureResult {
   }
 
   factory CaptureResult.fromJson(Map<String, dynamic> json) {
+    final intentType =
+        captureIntentTypeFromJson(json['intent_type'] as String? ?? 'unclear');
     final todoPayload = json['todo_payload'] is Map<String, dynamic>
         ? TodoPayload.fromJson(json['todo_payload'] as Map<String, dynamic>)
         : null;
@@ -294,17 +296,32 @@ class CaptureResult {
         .whereType<Map<String, dynamic>>()
         .map(TodoPayload.fromJson)
         .toList(growable: false);
+    final ideaPayload = json['idea_payload'] is Map<String, dynamic>
+        ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
+        : null;
+    final hasIdeaContent = intentType == CaptureIntentType.idea &&
+        (ideaPayload?.summary.trim().isNotEmpty ?? false);
+    final rawSummary = json['summary'] as String? ?? '';
+    final rawMissingFields =
+        (json['missing_fields'] as List<dynamic>? ?? const [])
+            .map((item) => item.toString())
+            .toList();
     return CaptureResult(
-      intentType: captureIntentTypeFromJson(
-          json['intent_type'] as String? ?? 'unclear'),
+      intentType: intentType,
       confidence: (json['confidence'] as num? ?? 0).toDouble(),
-      title: json['title'] as String? ?? '未命名记录',
-      summary: json['summary'] as String? ?? '',
-      missingFields: (json['missing_fields'] as List<dynamic>? ?? const [])
-          .map((item) => item.toString())
-          .toList(),
-      followUpQuestion: json['follow_up_question'] as String?,
-      shouldSave: json['should_save'] as bool? ?? false,
+      title: _resolveCaptureTitle(
+        intentType: intentType,
+        title: json['title'] as String?,
+        ideaSummary: ideaPayload?.summary,
+        summary: rawSummary,
+      ),
+      summary: rawSummary.trim().isNotEmpty
+          ? rawSummary
+          : (ideaPayload?.summary ?? ''),
+      missingFields: hasIdeaContent ? const [] : rawMissingFields,
+      followUpQuestion:
+          hasIdeaContent ? null : json['follow_up_question'] as String?,
+      shouldSave: hasIdeaContent || (json['should_save'] as bool? ?? false),
       todoPayload:
           todoPayload ?? (todoPayloads.isEmpty ? null : todoPayloads.first),
       todoPayloads: todoPayloads,
@@ -312,9 +329,7 @@ class CaptureResult {
           ? LedgerPayload.fromJson(
               json['ledger_payload'] as Map<String, dynamic>)
           : null,
-      ideaPayload: json['idea_payload'] is Map<String, dynamic>
-          ? IdeaPayload.fromJson(json['idea_payload'] as Map<String, dynamic>)
-          : null,
+      ideaPayload: ideaPayload,
       todoDeletePayload: json['todo_delete_payload'] is Map<String, dynamic>
           ? TodoDeletePayload.fromJson(
               json['todo_delete_payload'] as Map<String, dynamic>)
@@ -352,6 +367,38 @@ class CaptureResult {
       'updated_fields': updatedFields,
     };
   }
+}
+
+const _genericIdeaTitles = {
+  '想法',
+  '灵感',
+  '笔记',
+  '未命名记录',
+  '未命名想法',
+};
+
+String _resolveCaptureTitle({
+  required CaptureIntentType intentType,
+  required String? title,
+  required String? ideaSummary,
+  required String? summary,
+}) {
+  final normalizedTitle = title?.trim() ?? '';
+  if (intentType != CaptureIntentType.idea ||
+      (normalizedTitle.isNotEmpty &&
+          !_genericIdeaTitles.contains(normalizedTitle))) {
+    return normalizedTitle.isEmpty ? '未命名记录' : normalizedTitle;
+  }
+
+  final source = (ideaSummary?.trim().isNotEmpty ?? false)
+      ? ideaSummary!.trim()
+      : summary?.trim() ?? '';
+  if (source.isEmpty) {
+    return '未命名想法';
+  }
+
+  final firstClause = source.split(RegExp(r'[。！？!?；;，,\n]')).first.trim();
+  return firstClause.length <= 18 ? firstClause : firstClause.substring(0, 18);
 }
 
 DateTime? _parseDate(dynamic value) {

@@ -46,6 +46,10 @@ void main() {
         received.url.toString(), 'https://api.deepseek.com/chat/completions');
     expect(received.headers['authorization'], 'Bearer deepseek-key');
     expect(requestBody['model'], 'deepseek-v4-flash');
+    final systemPrompt = ((requestBody['messages'] as List).first
+        as Map<String, dynamic>)['content'] as String;
+    expect(systemPrompt, contains('idea 的 title 必须是 8–18 个中文字符的主题概括'));
+    expect(systemPrompt, contains('不得将 title 放入 missing_fields'));
   });
 
   test('streams visible assistant text and parses hidden capture json',

@@ -2,6 +2,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:local_idea_capture/src/domain/capture_models.dart';
 
 void main() {
+  test('uses the idea summary when the model omits an idea title', () {
+    final capture = CaptureResult.fromJson({
+      'intent_type': 'idea',
+      'confidence': 0.96,
+      'title': '   ',
+      'summary': '顶层摘要不应覆盖想法正文',
+      'missing_fields': <String>[],
+      'follow_up_question': null,
+      'should_save': true,
+      'todo_payload': null,
+      'idea_payload': {
+        'summary': '构建一个可自动归档的灵感记录应用',
+        'source_hint': null,
+        'tags': <String>['产品'],
+      },
+    });
+
+    expect(capture.title, '构建一个可自动归档的灵感记录应用');
+  });
+
+  test('replaces a generic idea title with a concise summary fallback', () {
+    final capture = CaptureResult.fromJson({
+      'intent_type': 'idea',
+      'confidence': 0.96,
+      'title': '想法',
+      'summary': '顶层摘要不应覆盖想法正文',
+      'missing_fields': <String>['title'],
+      'follow_up_question': '请为这个想法提炼一个标题。',
+      'should_save': false,
+      'todo_payload': null,
+      'idea_payload': {
+        'summary': '研究语音记录如何按项目与主题自动归档，并在后续查询中提供相关建议。',
+        'source_hint': null,
+        'tags': <String>['产品'],
+      },
+    });
+
+    expect(capture.title, '研究语音记录如何按项目与主题自动归档');
+    expect(capture.missingFields, isEmpty);
+    expect(capture.followUpQuestion, isNull);
+    expect(capture.shouldSave, isTrue);
+  });
+
   test('parses model todo times with timezone as local business time', () {
     final capture = CaptureResult.fromJson({
       'intent_type': 'todo',
